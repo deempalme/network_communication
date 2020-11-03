@@ -14,10 +14,9 @@
 
 namespace ramrod {
   namespace network_communication {
-    server::server(const std::string ip,
-                                                               const int port) :
-      ip_(ip),
-      port_{port},
+    server::server() :
+      ip_(),
+      port_{1313},
       socket_fd_{0},
       client_{nullptr},
       last_receiver_{nullptr},
@@ -115,6 +114,14 @@ namespace ramrod {
       return !(connected_ = false);
     }
 
+    uint16_t server::host_to_network(const uint16_t host_value){
+      return ::htons(host_value);
+    }
+
+    uint32_t server::host_to_network(const uint32_t host_value){
+      return ::htonl(host_value);
+    }
+
     const std::string &server::ip(){
       return ip_;
     }
@@ -126,6 +133,14 @@ namespace ramrod {
     void server::mtu(const short mtu_byte_size){
       mtu_ = mtu_byte_size;
       is_jumbo_packet_ = mtu_ >= 7700;
+    }
+
+    uint16_t server::network_to_host(const uint16_t network_value){
+      return ::ntohs(network_value);
+    }
+
+    uint32_t server::network_to_host(const uint32_t network_value){
+      return ::ntohl(network_value);
     }
 
     int server::port(){

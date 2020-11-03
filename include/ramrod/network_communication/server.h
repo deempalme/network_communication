@@ -14,7 +14,7 @@ namespace ramrod {
     class server
     {
     public:
-      server(const std::string ip = "127.1.0.13", const int port = 1313);
+      server();
       ~server();
 
       bool connect(const std::string ip = "127.1.0.13", const int port = 1313);
@@ -22,10 +22,16 @@ namespace ramrod {
 
       void max_queue(const int max_pending_connections = 10);
 
+      uint16_t host_to_network(const uint16_t host_value);
+      uint32_t host_to_network(const uint32_t host_value);
+
       const std::string& ip();
 
       short mtu();
       void mtu(const short mtu_byte_size = 1500);
+
+      uint16_t network_to_host(const uint16_t network_value);
+      uint32_t network_to_host(const uint32_t network_value);
 
       int port();
 
