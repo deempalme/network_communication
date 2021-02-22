@@ -148,7 +148,7 @@ namespace ramrod {
 
       // first, load up address structs with getaddrinfo():
 
-      memset(&hints, 0, sizeof(hints));
+      std::memset(&hints, 0, sizeof(hints));
       hints.ai_family = AF_UNSPEC;
       hints.ai_socktype = SOCK_DGRAM;
       hints.ai_flags = AI_PASSIVE;
