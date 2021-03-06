@@ -1,0 +1,3 @@
+[submodule "lib/ramrod/console_printer"]
+	path = lib/ramrod/console_printer
+	url = https://github.com/deempalme/console_printer.git
