@@ -33,9 +33,10 @@ if(NOT TARGET ${RamRodNetwork_LIBRARIES})
 
   target_sources(${PROJECT_NAME}
     PRIVATE
-    #src/ramrod/network_communication/client.cpp
-    src/ramrod/network_communication/server.cpp
-    )
+      src/ramrod/network_communication/conversor.cpp
+      src/ramrod/network_communication/client.cpp
+      src/ramrod/network_communication/server.cpp
+  )
 
   target_include_directories(${PROJECT_NAME} BEFORE
     PRIVATE

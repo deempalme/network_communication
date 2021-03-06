@@ -21,6 +21,7 @@
 namespace ramrod {
   namespace network_communication {
     server::server() :
+      conversor(),
       ip_(),
       port_{1313},
       socket_fd_{-1},
@@ -40,7 +41,9 @@ namespace ramrod {
       disconnect();
     }
 
-    void server::connect(const std::string ip, const int port){
+    bool server::connect(const std::string ip, const int port){
+      // TODO: cancell all pending connections?
+      if(connecting_) return false;
       if(connected_) disconnect();
 
       ip_ = ip;
@@ -49,6 +52,7 @@ namespace ramrod {
       current_intent_ = 0;
 
       std::thread(&server::concurrent_connector, this, true).detach();
+      return true;
     }
 
     bool server::disconnect(){
@@ -57,14 +61,6 @@ namespace ramrod {
       terminate_concurrent_ = true;
 
       return close_child() & close();
-    }
-
-    std::uint16_t server::host_to_network(const std::uint16_t host_value){
-      return ::htons(host_value);
-    }
-
-    std::uint32_t server::host_to_network(const std::uint32_t host_value){
-      return ::htonl(host_value);
     }
 
     const std::string &server::ip(){
@@ -91,14 +87,6 @@ namespace ramrod {
 
     void server::max_reconnection_intents(const std::uint32_t new_max_intents){
       max_intents_ = new_max_intents;
-    }
-
-    std::uint16_t server::network_to_host(const std::uint16_t network_value){
-      return ::ntohs(network_value);
-    }
-
-    std::uint32_t server::network_to_host(const std::uint32_t network_value){
-      return ::ntohl(network_value);
     }
 
     int server::port(){
@@ -152,7 +140,6 @@ namespace ramrod {
       current_intent_ = 0;
 
       std::thread(&server::concurrent_connector, this, true).detach();
-
       return true;
     }
 
@@ -233,9 +220,8 @@ namespace ramrod {
         return false;
       }
 
-      connected_ = false;
       connected_fd_ = -1;
-      return true;
+      return !(connected_ = false);
     }
 
     void server::concurrent_connector(const bool force){

@@ -8,9 +8,11 @@
 #include <ratio>         // for milli
 #include <string>        // for string
 
+#include "ramrod/network_communication/conversor.h"
+
 namespace ramrod {
   namespace network_communication {
-    class server
+    class server : public conversor
     {
     public:
       server();
@@ -24,32 +26,16 @@ namespace ramrod {
        *
        * @param ip Selected IP address to connect
        * @param port Port number to where the connection will be made
+       * 
+       * @return `false` if there is already a pending connection open
        */
-      void connect(const std::string ip, const int port = 1313);
+      bool connect(const std::string ip, const int port = 1313);
       /**
        * @brief Disconnects this device from the current connected network's device
        *
        * @return `false` if the connection cannot be closed
        */
       bool disconnect();
-      /**
-       * @brief Converting a 16 bit integer value stored in a big/little endian
-       *        machine into the network's endian type
-       *
-       * @param host_value Unsigned 16 bit integer value to be converted
-       *
-       * @return The 16 bit `host_value` converted into the network's endian type
-       */
-      std::uint16_t host_to_network(const std::uint16_t host_value);
-      /**
-       * @brief Converting a 32 bit integer value stored in a big/little endian
-       *        machine into the network's endian type
-       *
-       * @param host_value Unsigned 32 bit integer value to be converted
-       *
-       * @return The 32 bit `host_value` converted into the network's endian type
-       */
-      std::uint32_t host_to_network(const std::uint32_t host_value);
       /**
        * @brief Getting the current IP address
        *
@@ -90,24 +76,6 @@ namespace ramrod {
        * @param new_max_intents New number of maximum reconnection intents
        */
       void max_reconnection_intents(const std::uint32_t new_max_intents);
-      /**
-       * @brief Converting a 16 bit integer value stored in the network's endian type
-       *        into the endian type that your computer uses
-       *
-       * @param network_value Unsigned 16 bit integer value to be converted
-       *
-       * @return The 16 bit `host_value` converted into your computer's endian type
-       */
-      std::uint16_t network_to_host(const std::uint16_t network_value);
-      /**
-       * @brief Converting a 32 bit integer value stored in the network's endian type
-       *        into the endian type that your computer uses
-       *
-       * @param network_value Unsigned 32 bit integer value to be converted
-       *
-       * @return The 32 bit `host_value` converted into your computer's endian type
-       */
-      std::uint32_t network_to_host(const std::uint32_t network_value);
       /**
        * @brief Getting the current port
        *
