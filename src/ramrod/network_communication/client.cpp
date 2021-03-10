@@ -4,7 +4,6 @@
 #include <cstring>                     // for memset
 #include <iosfwd>                      // for size_t
 #include <netdb.h>                     // for addrinfo, freeaddrinfo, gai_st...
-#include <netinet/in.h>                // for htonl, htons, ntohl, ntohs
 #include <signal.h>                    // for sigaction, sigemptyset, SA_RES...
 #include <sys/wait.h>                  // for waitpid, WNOHANG
 #include <thread>                      // for sleep_for, thread
@@ -25,7 +24,6 @@ namespace ramrod {
       ip_(),
       port_{1313},
       socket_fd_{-1},
-      connected_fd_{-1},
       max_queue_{10},
       current_intent_{0},
       max_intents_{10},
@@ -94,10 +92,8 @@ namespace ramrod {
     }
 
     ssize_t client::receive(char *buffer, const ssize_t size, const int flags){
-      if(!connected_){
-        rr::error("There is no connection to receive from.");
-        return -1;
-      }
+      if(!connected_)
+        return 0;
 
       ssize_t total_received{0};
       ssize_t bytes_left = size;
@@ -105,14 +101,21 @@ namespace ramrod {
       std::uint32_t error_counter{0};
 
       while(total_received < size){
-        if((received_size = ::recv(connected_fd_, buffer + total_received,
-                                   static_cast<std::size_t>(bytes_left), flags)) == -1){
+        if((received_size = ::recv(socket_fd_, buffer + total_received,
+                                   static_cast<std::size_t>(bytes_left), flags)) <= 0){
+          // The server has disconnected
+          if(received_size == 0)
+             return 0;
+
           rr::perror("Receiving data");
+
+          // There is an error and returns after the max intents have been reached
+          if(++error_counter > max_intents_)
+            return -1;
+
+          // This will try to receive the same data than the last time
           std::this_thread::sleep_for(std::chrono::milliseconds(5));
-          if(++error_counter > max_intents_){
-            total_received = -1;
-            break;
-          }
+          continue;
         }
         total_received += received_size;
         bytes_left -= received_size;
@@ -122,8 +125,7 @@ namespace ramrod {
 
     bool client::receive_concurrently(char *buffer, ssize_t *size, const int flags){
       if(!connected_){
-        rr::error("There is no connection to receive from.");
-        *size = -1;
+        *size = 0;
         return false;
       }
 
@@ -144,10 +146,8 @@ namespace ramrod {
     }
 
     ssize_t client::send(const char *buffer, const ssize_t size, const int flags){
-      if(!connected_){
-        rr::error("There is no connection to send from.");
-        return -1;
-      }
+      if(!connected_)
+        return 0;
 
       ssize_t total_sent{0};
       ssize_t bytes_left = size;
@@ -155,14 +155,21 @@ namespace ramrod {
       std::uint32_t error_counter{0};
 
       while(total_sent < size){
-        if((sent_size = ::send(connected_fd_, buffer + total_sent,
-                               static_cast<std::size_t>(bytes_left), flags)) == -1){
+        if((sent_size = ::send(socket_fd_, buffer + total_sent,
+                               static_cast<std::size_t>(bytes_left), flags)) <= 0){
+          // The server has disconnected
+          if(sent_size == 0)
+             return 0;
+
           rr::perror("Sending data");
+
+          // There is an error and returns after the max intents have been reached
+          if(++error_counter > max_intents_)
+            return -1;
+
+          // This will try to send the same data than the last time
           std::this_thread::sleep_for(std::chrono::milliseconds(5));
-          if(++error_counter > max_intents_){
-            total_sent = -1;
-            break;
-          }
+          continue;
         }
         total_sent += sent_size;
         bytes_left -= sent_size;
@@ -172,8 +179,7 @@ namespace ramrod {
 
     bool client::send_concurrently(const char *buffer, ssize_t *size, const int flags){
       if(!connected_){
-        rr::error("There is no connection to send from.");
-        *size = -1;
+        *size = 0;
         return false;
       }
 
@@ -199,6 +205,9 @@ namespace ramrod {
         rr::warning("Connection already closed.");
         return true;
       }
+
+      if(::shutdown(socket_fd_, SHUT_RDWR) == -1)
+        rr::perror("Connection cannot be shutdown");
 
       if(::close(socket_fd_) == -1){
         rr::perror("Connection cannot be closed");
@@ -263,6 +272,7 @@ namespace ramrod {
         rr::attention() << "Trying reconnection in " << reconnection_time_.count() / 1000
                         << " seconds... (#" << current_intent_ << ")" << rr::endl;
         std::this_thread::sleep_for(reconnection_time_);
+        rr::attention("Reconnecting!");
         std::thread(&client::concurrent_connector, this, false).detach();
         return;
       }
@@ -291,14 +301,25 @@ namespace ramrod {
       std::uint32_t error_counter{0};
 
       while(total_received < *size && !terminate_send_){
-        if((received_size = ::recv(connected_fd_, buffer + total_received,
-                                   static_cast<std::size_t>(bytes_left), flags)) == -1){
-          rr::perror("Receiving data");
-          std::this_thread::sleep_for(std::chrono::milliseconds(5));
-          if(++error_counter > max_intents_){
-            total_received = -1;
-            break;
+        if((received_size = ::recv(socket_fd_, buffer + total_received,
+                                   static_cast<std::size_t>(bytes_left), flags)) <= 0){
+          // The server has disconnected
+          if(received_size == 0){
+            *size = 0;
+            return;
           }
+
+          rr::perror("Receiving data");
+
+          // There is an error and returns after the max intents have been reached
+          if(++error_counter > max_intents_){
+            *size = -1;
+            return;
+          }
+
+          // This will try to receive the same data than the last time
+          std::this_thread::sleep_for(std::chrono::milliseconds(5));
+          continue;
         }
         total_received += received_size;
         bytes_left -= received_size;
@@ -313,14 +334,25 @@ namespace ramrod {
       std::uint32_t error_counter{0};
 
       while(total_sent < *size && !terminate_send_){
-        if((sent_size = ::send(connected_fd_, buffer + total_sent,
-                               static_cast<std::size_t>(bytes_left), flags)) == -1){
-          rr::perror("Sending data");
-          std::this_thread::sleep_for(std::chrono::milliseconds(5));
-          if(++error_counter > max_intents_){
-            total_sent = -1;
-            break;
+        if((sent_size = ::send(socket_fd_, buffer + total_sent,
+                               static_cast<std::size_t>(bytes_left), flags)) <= 0){
+          // The server has disconnected
+          if(sent_size == 0){
+            *size = 0;
+            return;
           }
+
+          rr::perror("Sending data");
+
+          // There is an error and returns after the max intents have been reached
+          if(++error_counter > max_intents_){
+            *size = -1;
+            return;
+          }
+
+          // This will try to receive the same data than the last time
+          std::this_thread::sleep_for(std::chrono::milliseconds(5));
+          continue;
         }
         total_sent += sent_size;
         bytes_left -= sent_size;
