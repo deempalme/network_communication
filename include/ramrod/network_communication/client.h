@@ -104,8 +104,8 @@ namespace ramrod {
        *                       or if some error occurs or if the remote side closes the
        *                       connection, etc. Don’t be mad with it.
        *
-       * @return The number of bytes actually received, or -1 on error (and `errno` will be
-       *         set accordingly).
+       * @return The number of bytes actually received, or 0 when the server is disconnected,
+       *         or -1 on error (and `errno` will be set accordingly).
        */
       ssize_t receive(char *buffer, const ssize_t size, const int flags = 0);
       /**
@@ -113,7 +113,9 @@ namespace ramrod {
        *
        * @param buffer Is a pointer to the data you want to receive
        * @param size   Is a pointer to the number of bytes you want to receive, when the task is
-       *               finished it will return the total number of bytes actually received.
+       *               finished it will return the total number of bytes actually received, or 0 
+       *               when the server is disconnected, or -1 on error (and `errno` will be set
+       *               accordingly).
        * @param flags  Allows you to specify more information about how the data is to be received.
        *          MSG_OOB      Receive as “out of band” data. This is how to get data that has
        *                       been sent to you with the `MSG_OOB` flag in `send()`. As the
@@ -164,8 +166,8 @@ namespace ramrod {
        *                        `receive()`ing, you’ll typically get the signal `SIGPIPE`.
        *                        Adding this flag prevents that signal from being raised.
        *
-       * @return The number of bytes actually sent, or -1 on error (and `errno` will be
-       *         set accordingly).
+       * @return The number of bytes actually received, or 0 when the server is disconnected,
+       *         or -1 on error (and `errno` will be set accordingly).
        */
       ssize_t send(const char *buffer, const ssize_t size, const int flags = MSG_NOSIGNAL);
       /**
@@ -173,7 +175,9 @@ namespace ramrod {
        *
        * @param buffer Is a pointer to the data you want to send
        * @param size   Is a pointer to the number of bytes you want to send, when the task is
-       *               finished it will return the total number of bytes actually sent.
+       *               finished it will return the total number of bytes actually sent, or 0 
+       *               when the server is disconnected, or -1 on error (and `errno` will be set
+       *               accordingly).
        * @param flags  Allows you to specify more information about how the data is to be sent.
        *          MSG_OOB       Send as “out of band” data. TCP supports this, and it’s a way to
        *                        tell the receiving system that this data has a higher priority
@@ -217,7 +221,6 @@ namespace ramrod {
       std::string ip_;
       int port_;
       int socket_fd_;
-      int connected_fd_;
       int max_queue_;
       std::uint32_t current_intent_;
       std::uint32_t max_intents_;
