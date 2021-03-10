@@ -46,6 +46,7 @@ if(NOT TARGET ${RamRodNetwork_LIBRARIES})
 
   target_link_libraries(${PROJECT_NAME}
     ${RamRodConsole_LIBRARIES}
+    pthread
   )
 
   target_compile_features(${PROJECT_NAME} PRIVATE cxx_std_17)
