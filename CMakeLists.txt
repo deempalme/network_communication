@@ -51,8 +51,14 @@ if(NOT TARGET ${RamRodNetwork_LIBRARIES})
 
   target_compile_features(${PROJECT_NAME} PRIVATE cxx_std_17)
 
-  # TODO: delete this after finishing code
   if(CMAKE_BUILD_TYPE MATCHES Debug)
+    # Allows the program to print in console/terminal detailed error's explanations
+    target_compile_definitions(${PROJECT_NAME}
+      PRIVATE
+        VERBOSE=True
+    )
+
+    # TODO: delete this after finishing code
     message(WARNING "Compiling warnings in debug mode: ${CMAKE_BUILD_TYPE}")
 
     target_compile_options(${PROJECT_NAME}
