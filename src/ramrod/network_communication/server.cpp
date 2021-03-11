@@ -33,6 +33,7 @@ namespace ramrod {
       terminate_send_{false},
       connected_{false},
       connecting_{false},
+      is_tcp_{false},
       reconnection_time_(std::chrono::milliseconds(5000))
     {}
 
@@ -40,8 +41,7 @@ namespace ramrod {
       disconnect();
     }
 
-    bool server::connect(const std::string ip, const int port){
-      // TODO: cancell all pending connections?
+    bool server::connect(const std::string ip, const int port, const int socket_type){
       if(connecting_) return false;
       if(connected_) disconnect();
 
@@ -49,6 +49,9 @@ namespace ramrod {
       port_ = port;
       connecting_ = true;
       current_intent_ = 0;
+      is_tcp_ = socket_type != SOCK_DGRAM;
+
+      terminate_concurrent_ = false;
 
       std::thread(&server::concurrent_connector, this, true).detach();
       return true;
@@ -93,6 +96,15 @@ namespace ramrod {
     }
 
     ssize_t server::receive(char *buffer, const ssize_t size, const int flags){
+      ssize_t received{::recv(connected_fd_, buffer, static_cast<std::size_t>(size), flags)};
+#ifdef VERBOSE
+      if(received < 0) rr::perror("Receiving data");
+#endif
+      return received;
+    }
+
+    ssize_t server::receive_all(char *buffer, const ssize_t size, bool *breaker,
+                                const int flags){
       if(!connected_)
         return 0;
 
@@ -100,16 +112,18 @@ namespace ramrod {
       ssize_t bytes_left = size;
       ssize_t received_size;
       std::uint32_t error_counter{0};
+      bool never{false};
+      if(breaker == nullptr) breaker = &never;
 
-      while(total_received < size){
+      while(total_received < size && !(*breaker)){
         if((received_size = ::recv(connected_fd_, buffer + total_received,
                                    static_cast<std::size_t>(bytes_left), flags)) <= 0){
           // The server has disconnected
           if(received_size == 0)
              return 0;
-
+#ifdef VERBOSE
           rr::perror("Receiving data");
-
+#endif
           // There is an error and returns after the max intents have been reached
           if(++error_counter > max_intents_)
             return -1;
@@ -122,6 +136,17 @@ namespace ramrod {
         bytes_left -= received_size;
       }
       return total_received;
+    }
+
+    bool server::receive_all_concurrently(char *buffer, ssize_t *size, bool *breaker,
+                                          const int flags){
+      if(!connected_){
+        *size = 0;
+        return false;
+      }
+
+      std::thread(&server::concurrent_receive_all, this, buffer, size, breaker, flags).detach();
+      return true;
     }
 
     bool server::receive_concurrently(char *buffer, ssize_t *size, const int flags){
@@ -147,6 +172,15 @@ namespace ramrod {
     }
 
     ssize_t server::send(const char *buffer, const ssize_t size, const int flags){
+      ssize_t sent{::send(connected_fd_, buffer, static_cast<std::size_t>(size), flags)};
+#ifdef VERBOSE
+      if(sent < 0) rr::perror("Sending data");
+#endif
+      return sent;
+    }
+
+    ssize_t server::send_all(const char *buffer, const ssize_t size, bool *breaker,
+                             const int flags){
       if(!connected_)
         return 0;
 
@@ -154,16 +188,18 @@ namespace ramrod {
       ssize_t bytes_left = size;
       ssize_t sent_size;
       std::uint32_t error_counter{0};
+      bool never{false};
+      if(breaker == nullptr) breaker = &never;
 
-      while(total_sent < size){
+      while(total_sent < size && !(*breaker)){
         if((sent_size = ::send(connected_fd_, buffer + total_sent,
                                static_cast<std::size_t>(bytes_left), flags)) <= 0){
           // The server has disconnected
           if(sent_size == 0)
              return 0;
-
+#ifdef VERBOSE
           rr::perror("Sending data");
-
+#endif
           // There is an error and returns after the max intents have been reached
           if(++error_counter > max_intents_)
             return -1;
@@ -176,6 +212,17 @@ namespace ramrod {
         bytes_left -= sent_size;
       }
       return total_sent;
+    }
+
+    bool server::send_all_concurrently(const char *buffer, ssize_t *size, bool *breaker,
+                                       const int flags){
+      if(!connected_){
+        *size = 0;
+        return false;
+      }
+
+      std::thread(&server::concurrent_send_all, this, buffer, size, breaker, flags).detach();
+      return true;
     }
 
     bool server::send_concurrently(const char *buffer, ssize_t *size, const int flags){
@@ -203,7 +250,9 @@ namespace ramrod {
 
     bool server::close(){
       if(socket_fd_ < 0){
+#ifdef VERBOSE
         rr::warning("Connection already closed.");
+#endif
         return true;
       }
 
@@ -220,8 +269,15 @@ namespace ramrod {
     }
 
     bool server::close_child(){
+      if(!is_tcp_){
+        connected_fd_ = -1;
+        return !(connected_ = false);
+      }
+
       if(connected_fd_ < 0){
+#ifdef VERBOSE
         rr::warning("Children connection already closed.");
+#endif
         return !(connected_ = false);
       }
 
@@ -249,10 +305,10 @@ namespace ramrod {
       struct addrinfo *results; // Will point to the results
       struct addrinfo *pointer;
 
-      std::memset(&hints, 0, sizeof(hints));  // make sure the struct is empty
-      hints.ai_family = AF_UNSPEC;            // don't care if IPv4 or IPv6
-      hints.ai_socktype = SOCK_STREAM;        // TCP stream sockets
-      hints.ai_flags = AI_PASSIVE;            // Fill in my Ip information for me
+      std::memset(&hints, 0, sizeof(addrinfo));               // make sure the struct is empty
+      hints.ai_family   = AF_UNSPEC;                          // don't care if IPv4 or IPv6
+      hints.ai_socktype = is_tcp_ ? SOCK_STREAM : SOCK_DGRAM; // UDP or TCP socket
+      hints.ai_flags    = AI_PASSIVE;                         // Fill in my Ip information for me
 
       // first, load up address structs with getaddrinfo():
       if((status = ::getaddrinfo(ip_.c_str(), std::to_string(port_).c_str(),
@@ -297,15 +353,21 @@ namespace ramrod {
         rr::attention() << "Trying reconnection in " << reconnection_time_.count() / 1000
                         << " seconds... (#" << current_intent_ << ")" << rr::endl;
         std::this_thread::sleep_for(reconnection_time_);
+
+        // Terminates the pending connection in case disconnect() is called:
+        if(terminate_concurrent_) return;
+
         rr::attention("Reconnecting!");
         std::thread(&server::concurrent_connector, this, false).detach();
         return;
       }
 
-      if(::listen(socket_fd_, max_queue_) == -1){
-        rr::perror("Listening to socket");
-        return;
-      }
+      // TODO: do we need to remove this when is UPD?
+      if(is_tcp_)
+        if(::listen(socket_fd_, max_queue_) == -1){
+          rr::perror("Listening to socket");
+          return;
+        }
 
       struct sigaction signal_action;
 
@@ -318,12 +380,23 @@ namespace ramrod {
         return;
       }
 
+      // If is UDP we terminate sooner so we do not accept() any incomming connection
+      if(!is_tcp_){
+        connected_fd_ = socket_fd_;
+        connected_ = true;
+        connecting_ = false;
+        terminate_receive_ = false;
+        terminate_send_ = false;
+        return;
+      }
+      // In case is TCP then we must accept an incomming connection
       std::thread(&server::concurrent_connection, this).detach();
     }
 
     void server::concurrent_connection(){
+#ifdef VERBOSE
       rr::attention("Waiting for incomming connections!");
-
+#endif
       struct sockaddr_storage their_addr;
       socklen_t addr_size;
 
@@ -334,26 +407,36 @@ namespace ramrod {
           rr::perror("Accepting connection");
           continue;
         }
-
+#ifdef VERBOSE
         rr::attention("Connection established!");
-
+#endif
         connected_ = true;
         connecting_ = false;
+        terminate_receive_ = false;
+        terminate_send_ = false;
 
-        // TODO: delete this because is not necessary?
-        // Listening socket not needed anymore
-        //close();
         break;
       }
     }
 
     void server::concurrent_receive(char *buffer, ssize_t *size, const int flags){
+      ssize_t received{::recv(connected_fd_, buffer, static_cast<std::size_t>(*size), flags)};
+#ifdef VERBOSE
+      if(received < 0) rr::perror("Receiving data");
+#endif
+      *size = received;
+    }
+
+    void server::concurrent_receive_all(char *buffer, ssize_t *size, bool *breaker,
+                                        const int flags){
       ssize_t total_received{0};
       ssize_t bytes_left = *size;
       ssize_t received_size;
       std::uint32_t error_counter{0};
+      bool never{false};
+      if(breaker == nullptr) breaker = &never;
 
-      while(total_received < *size && !terminate_send_){
+      while(total_received < *size && !terminate_send_ && !(*breaker)){
         if((received_size = ::recv(connected_fd_, buffer + total_received,
                                    static_cast<std::size_t>(bytes_left), flags)) <= 0){
           // The server has disconnected
@@ -361,9 +444,9 @@ namespace ramrod {
             *size = 0;
             return;
           }
-
+#ifdef VERBOSE
           rr::perror("Receiving data");
-
+#endif
           // There is an error and returns after the max intents have been reached
           if(++error_counter > max_intents_){
             *size = -1;
@@ -381,12 +464,23 @@ namespace ramrod {
     }
 
     void server::concurrent_send(const char *buffer, ssize_t *size, const int flags){
+      ssize_t sent{::send(connected_fd_, buffer, static_cast<std::size_t>(*size), flags)};
+#ifdef VERBOSE
+      if(sent < 0) rr::perror("Sending data");
+#endif
+      *size = sent;
+    }
+
+    void server::concurrent_send_all(const char *buffer, ssize_t *size, bool *breaker,
+                                     const int flags){
       ssize_t total_sent{0};
       ssize_t bytes_left = *size;
       ssize_t sent_size;
       std::uint32_t error_counter{0};
+      bool never{false};
+      if(breaker == nullptr) breaker = &never;
 
-      while(total_sent < *size && !terminate_send_){
+      while(total_sent < *size && !terminate_send_ && !(*breaker)){
         if((sent_size = ::send(connected_fd_, buffer + total_sent,
                                static_cast<std::size_t>(bytes_left), flags)) <= 0){
           // The server has disconnected
@@ -394,9 +488,9 @@ namespace ramrod {
             *size = 0;
             return;
           }
-
+#ifdef VERBOSE
           rr::perror("Sending data");
-
+#endif
           // There is an error and returns after the max intents have been reached
           if(++error_counter > max_intents_){
             *size = -1;

@@ -24,12 +24,16 @@ namespace ramrod {
        * one to another network's device, so the main thread will be not interrupted
        * because is waiting for the device with our selected IP address to connect.
        *
-       * @param ip Selected IP address to connect
-       * @param port Port number to where the connection will be made
+       * @param ip          Selected IP address to connect
+       * @param port        Port number to where the connection will be made
+       * @param socket_type Defines the type of connection TCP or UDP, options:
+       *                      SOCK_STREAM   Creates a TCP socket
+       *                      SOCK_DGRAM    Creates a connected datagram socket
        * 
-       * @return `false` if there is already a pending connection open
+       * @return `false` if there is already a pending connection open, call `disconnect()`
+       *         to cancel such connection
        */
-      bool connect(const std::string ip, const int port = 1313);
+      bool connect(const std::string ip, const int port = 1313, const int socket_type = SOCK_STREAM);
       /**
        * @brief Disconnects this device from the current connected network's device
        *
@@ -109,6 +113,72 @@ namespace ramrod {
        */
       ssize_t receive(char *buffer, const ssize_t size, const int flags = 0);
       /**
+       * @brief Receives all required sized data from a TCP socket stream
+       *
+       * This will loop until all the specified data's size has been received
+       *
+       * @param buffer  Is a pointer to the data you want to receive
+       * @param size    Is the number of bytes you want to receive
+       * @param breaker Is a pointer to a boolean variable that will break the infinite loop
+       *                when is set to `true`, if left as `nullptr` then it will keep waiting for
+       *                data until the size is fullfilled
+       * @param flags   Allows you to specify more information about how the data is to be received.
+       *          MSG_OOB      Receive as “out of band” data. This is how to get data that has
+       *                       been sent to you with the `MSG_OOB` flag in `send()`. As the
+       *                       receiving side, you will have had signal `SIGURG` raised telling
+       *                       you there is urgent data. In your handler for that signal, you
+       *                       could call `receive()` with this `MSG_OOB` flag.
+       *          MSG_PEEK     If you want to call `receive()` “just for pretend”, you can call
+       *                       it with this flag. This will tell you what’s waiting in the
+       *                       buffer for when you call `receive()` “for real” (i.e. without
+       *                       the `MSG_PEEK` flag. It’s like a sneak preview into the next
+       *                       `receive()` call.
+       *          MSG_WAITALL  Tell `receive()` to not return until all the data you specified
+       *                       in the len parameter. It will ignore your wishes in extreme
+       *                       circumstances, however, like if a signal interrupts the call
+       *                       or if some error occurs or if the remote side closes the
+       *                       connection, etc. Don’t be mad with it.
+       *
+       * @return The number of bytes actually received, or 0 when the server is disconnected,
+       *         or -1 on error (and `errno` will be set accordingly).
+       */
+      ssize_t receive_all(char *buffer, const ssize_t size, bool *breaker = nullptr,
+                          const int flags = 0);
+      /**
+       * @brief Receives all required sized data from a TCP socket stream in a different thread
+       *
+       * This will loop until all the specified data's size has been received
+       *
+       * @param buffer  Is a pointer to the data you want to receive
+       * @param size    Is a pointer to the number of bytes you want to receive, when the task is
+       *                finished it will return the total number of bytes actually received, or 0
+       *                when the server is disconnected, or -1 on error (and `errno` will be set
+       *                accordingly).
+       * @param breaker Is a pointer to a boolean variable that will break the infinite loop
+       *                when is set to `true`, if left as `nullptr` then it will keep waiting for
+       *                data until the size is fullfilled
+       * @param flags   Allows you to specify more information about how the data is to be received.
+       *          MSG_OOB      Receive as “out of band” data. This is how to get data that has
+       *                       been sent to you with the `MSG_OOB` flag in `send()`. As the
+       *                       receiving side, you will have had signal `SIGURG` raised telling
+       *                       you there is urgent data. In your handler for that signal, you
+       *                       could call `receive()` with this `MSG_OOB` flag.
+       *          MSG_PEEK     If you want to call `receive()` “just for pretend”, you can call
+       *                       it with this flag. This will tell you what’s waiting in the
+       *                       buffer for when you call `receive()` “for real” (i.e. without
+       *                       the `MSG_PEEK` flag. It’s like a sneak preview into the next
+       *                       `receive()` call.
+       *          MSG_WAITALL  Tell `receive()` to not return until all the data you specified
+       *                       in the len parameter. It will ignore your wishes in extreme
+       *                       circumstances, however, like if a signal interrupts the call
+       *                       or if some error occurs or if the remote side closes the
+       *                       connection, etc. Don’t be mad with it.
+       *
+       * @return `false` if there is no open connection.
+       */
+      bool receive_all_concurrently(char *buffer, ssize_t *size, bool *breaker = nullptr,
+                                    const int flags = 0);
+      /**
        * @brief Receives data from a TCP socket stream in a different thread
        *
        * @param buffer Is a pointer to the data you want to receive
@@ -171,6 +241,66 @@ namespace ramrod {
        */
       ssize_t send(const char *buffer, const ssize_t size, const int flags = MSG_NOSIGNAL);
       /**
+       * @brief Sends all required sized data to a TCP socket stream
+       *
+       * This will loop until all the specified data's size has been sent
+       *
+       * @param buffer  Is a pointer to the data you want to send
+       * @param size    Is the number of bytes you want to send
+       * @param breaker Is a pointer to a boolean variable that will break the infinite loop
+       *                when is set to `true`, if left as `nullptr` then it will keep waiting for
+       *                data until the size is fullfilled
+       * @param flags   Allows you to specify more information about how the data is to be sent.
+       *          MSG_OOB       Send as “out of band” data. TCP supports this, and it’s a way to
+       *                        tell the receiving system that this data has a higher priority
+       *                        than the normal data. The receiver will receive the signal SIGURG
+       *                        and it can then receive this data without first receiving all
+       *                        the rest of the normal data in the queue.
+       *          MSG_DONTROUTE Don’t send this data over a router, just keep it local.
+       *          MSG_DONTWAIT  If `send()` would block because outbound traffic is clogged, have
+       *                        it return `EAGAIN`. This is like a “enable non-blocking just for
+       *                        this send.”
+       *          MSG_NOSIGNAL  If you `send()` to a remote host which is no longer
+       *                        `receive()`ing, you’ll typically get the signal `SIGPIPE`.
+       *                        Adding this flag prevents that signal from being raised.
+       *
+       * @return The number of bytes actually received, or 0 when the server is disconnected,
+       *         or -1 on error (and `errno` will be set accordingly).
+       */
+      ssize_t send_all(const char *buffer, const ssize_t size, bool *breaker = nullptr,
+                       const int flags = MSG_NOSIGNAL);
+      /**
+       * @brief Sends all required sized data to a TCP socket stream in a different thread
+       *
+       * This will loop until all the specified data's size has been sent
+       *
+       * @param buffer Is a pointer to the data you want to send
+       * @param size   Is a pointer to the number of bytes you want to send, when the task is
+       *               finished it will return the total number of bytes actually sent, or 0
+       *               when the server is disconnected, or -1 on error (and `errno` will be set
+       *               accordingly).
+       * @param breaker Is a pointer to a boolean variable that will break the infinite loop
+       *                when is set to `true`, if left as `nullptr` then it will keep waiting for
+       *                data until the size is fullfilled
+       * @param flags  Allows you to specify more information about how the data is to be sent.
+       *          MSG_OOB       Send as “out of band” data. TCP supports this, and it’s a way to
+       *                        tell the receiving system that this data has a higher priority
+       *                        than the normal data. The receiver will receive the signal SIGURG
+       *                        and it can then receive this data without first receiving all
+       *                        the rest of the normal data in the queue.
+       *          MSG_DONTROUTE Don’t send this data over a router, just keep it local.
+       *          MSG_DONTWAIT  If `send()` would block because outbound traffic is clogged, have
+       *                        it return `EAGAIN`. This is like a “enable non-blocking just for
+       *                        this send.”
+       *          MSG_NOSIGNAL  If you `send()` to a remote host which is no longer
+       *                        `receive()`ing, you’ll typically get the signal `SIGPIPE`.
+       *                        Adding this flag prevents that signal from being raised.
+       *
+       * @return `false` if there is no open connection.
+       */
+      bool send_all_concurrently(const char *buffer, ssize_t *size, bool *breaker = nullptr,
+                                 const int flags = MSG_NOSIGNAL);
+      /**
        * @brief Sends data to a TCP socket stream in a different thread
        *
        * @param buffer Is a pointer to the data you want to send
@@ -216,7 +346,9 @@ namespace ramrod {
       void concurrent_connector(const bool force = true);
 
       void concurrent_receive(char *buffer, ssize_t *size, const int flags);
+      void concurrent_receive_all(char *buffer, ssize_t *size, bool *breaker, const int flags);
       void concurrent_send(const char *buffer, ssize_t *size, const int flags);
+      void concurrent_send_all(const char *buffer, ssize_t *size, bool *breaker, const int flags);
 
       std::string ip_;
       int port_;
@@ -229,6 +361,7 @@ namespace ramrod {
       bool terminate_send_;
       bool connected_;
       bool connecting_;
+      bool is_tcp_;
       std::chrono::duration<long, std::milli> reconnection_time_;
     };
 
