@@ -416,9 +416,6 @@ namespace ramrod {
 
       // If is UDP we wait for an incoming message that contains the client information
       if(!is_tcp_){
-        connecting_ = false;
-        terminate_receive_ = false;
-        terminate_send_ = false;
         sockaddr_storage receiver;
         socklen_t addrlen = sizeof(sockaddr_storage);
         char incoming[11];
@@ -427,8 +424,11 @@ namespace ramrod {
 #ifdef VERBOSE
           rr::perror("Receiving identifier");
 #endif
-          return;
         }
+
+        terminate_receive_ = false;
+        terminate_send_ = false;
+        connecting_ = false;
 
         if(::strcmp(incoming, "identifier") != 0){
 #ifdef VERBOSE
