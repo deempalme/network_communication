@@ -368,6 +368,7 @@ namespace ramrod {
       bool connecting_;
       bool is_tcp_;
       struct addrinfo *client_;
+      struct addrinfo *results_;
       std::chrono::duration<long, std::milli> reconnection_time_;
     };
 

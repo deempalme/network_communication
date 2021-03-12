@@ -35,6 +35,7 @@ namespace ramrod {
       connecting_{false},
       is_tcp_{false},
       client_{nullptr},
+      results_{nullptr},
       reconnection_time_(std::chrono::milliseconds(5000))
     {}
 
@@ -62,6 +63,8 @@ namespace ramrod {
       terminate_send_ = true;
       terminate_receive_ = true;
       terminate_concurrent_ = true;
+
+      if(results_) ::freeaddrinfo(results_);
 
       return close_child() & close();
     }
@@ -169,7 +172,7 @@ namespace ramrod {
     }
 
     bool server::receive_concurrently(char *buffer, ssize_t *size, const int flags){
-      if(!connected_ || size == 0){
+      if(!connected_ || *size == 0){
         *size = 0;
         return false;
       }
@@ -335,7 +338,6 @@ namespace ramrod {
 
       int status;
       struct addrinfo hints;
-      struct addrinfo *results;
 
       std::memset(&hints, 0, sizeof(addrinfo));               // make sure the struct is empty
       hints.ai_family   = AF_UNSPEC;                          // don't care if IPv4 or IPv6
@@ -344,13 +346,13 @@ namespace ramrod {
 
       // first, load up address structs with getaddrinfo():
       if((status = ::getaddrinfo(ip_.c_str(), std::to_string(port_).c_str(),
-                                 &hints, &results)) != 0){
+                                 &hints, &results_)) != 0){
         rr::formatted("Error: getaddrinfo (%s)\n", rr::message::error, ::gai_strerror(status));
         return;
       }
 
       // loop through all the results and bind to the first we can
-      for(client_ = results; client_ != nullptr; client_ = client_->ai_next){
+      for(client_ = results_; client_ != nullptr; client_ = client_->ai_next){
         // Making a socket
         if((socket_fd_ = ::socket(client_->ai_family, client_->ai_socktype,
                                   client_->ai_protocol)) == -1){
@@ -373,9 +375,12 @@ namespace ramrod {
         break;
       }
 
-      ::freeaddrinfo(results); // all done with this structure
+      if(is_tcp_) ::freeaddrinfo(results_); // all done with this structure
 
       if(client_ == nullptr){
+        if(results_) freeaddrinfo(results_);
+        results_ = nullptr;
+
         rr::perror("Server failed to bind");
         if(++current_intent_ > max_intents_){
           rr::error("Max number of reconnections has been reached "
