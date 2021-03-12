@@ -436,11 +436,13 @@ namespace ramrod {
 #endif
           return;
         }
-
         std::memcpy(client_->ai_addr, &receiver, addrlen);
         client_->ai_addrlen = addrlen;
         connected_fd_ = socket_fd_;
         connected_ = true;
+#ifdef VERBOSE
+        rr::attention("Connection established!");
+#endif
         return;
       }
       // In case is TCP then we must accept an incomming connection
