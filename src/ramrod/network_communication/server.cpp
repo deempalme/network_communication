@@ -64,6 +64,7 @@ namespace ramrod {
       terminate_send_ = true;
       terminate_receive_ = true;
       terminate_concurrent_ = true;
+      first_received_ = false;
 
       if(results_) ::freeaddrinfo(results_);
 
