@@ -320,7 +320,7 @@ namespace ramrod {
 
       if(::close(connected_fd_) == -1){
         rr::perror("Children connection cannot be closed");
-        return false;
+        return !(connected_ = false);
       }
 
       connected_fd_ = -1;
