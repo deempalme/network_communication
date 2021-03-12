@@ -355,6 +355,13 @@ namespace ramrod {
       }
       // END TODO:
 
+      char outgoing[11] = "identifier";
+      if(::send(socket_fd_, outgoing, sizeof(outgoing), MSG_NOSIGNAL) < 0){
+#ifdef VERBOSE
+        rr::perror("Sending identifier");
+#endif
+      }
+
       connected_ = true;
       connecting_ = false;
       terminate_receive_ = false;

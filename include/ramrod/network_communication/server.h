@@ -373,7 +373,6 @@ namespace ramrod {
       bool is_tcp_;
       addrinfo *client_;
       addrinfo *results_;
-      bool first_received_;
       std::chrono::duration<long, std::milli> reconnection_time_;
     };
 
