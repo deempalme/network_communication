@@ -36,6 +36,7 @@ namespace ramrod {
       is_tcp_{false},
       client_{nullptr},
       results_{nullptr},
+      first_received_{false},
       reconnection_time_(std::chrono::milliseconds(5000))
     {}
 
@@ -103,7 +104,9 @@ namespace ramrod {
       if(!connected_ || size == 0)
         return 0;
 
+      first_received_ = true;
       ssize_t received{0};
+
       if(is_tcp_)
         received = ::recv(connected_fd_, buffer, static_cast<std::size_t>(size), flags);
       else
@@ -121,6 +124,7 @@ namespace ramrod {
       if(!connected_ || size == 0)
         return 0;
 
+      first_received_ = true;
       ssize_t total_received{0};
       ssize_t bytes_left = size;
       ssize_t received_size;
@@ -167,6 +171,7 @@ namespace ramrod {
         return false;
       }
 
+      first_received_ = true;
       std::thread(&server::concurrent_receive_all, this, buffer, size, breaker, flags).detach();
       return true;
     }
@@ -177,6 +182,7 @@ namespace ramrod {
         return false;
       }
 
+      first_received_ = true;
       std::thread(&server::concurrent_receive, this, buffer, size, flags).detach();
       return true;
     }
@@ -194,7 +200,7 @@ namespace ramrod {
     }
 
     ssize_t server::send(const char *buffer, const ssize_t size, const int flags){
-      if(!connected_ || size == 0)
+      if(!connected_ || size == 0 || (!is_tcp_ && !first_received_))
         return 0;
 
       ssize_t sent{0};
@@ -212,7 +218,7 @@ namespace ramrod {
 
     ssize_t server::send_all(const char *buffer, const ssize_t size, bool *breaker,
                              const int flags){
-      if(!connected_ || size == 0)
+      if(!connected_ || size == 0 || (!is_tcp_ && !first_received_))
         return 0;
 
       ssize_t total_sent{0};
@@ -257,7 +263,7 @@ namespace ramrod {
 
     bool server::send_all_concurrently(const char *buffer, ssize_t *size, bool *breaker,
                                        const int flags){
-      if(!connected_ || *size == 0){
+      if(!connected_ || *size == 0 || (!is_tcp_ && !first_received_)){
         *size = 0;
         return false;
       }
@@ -267,7 +273,7 @@ namespace ramrod {
     }
 
     bool server::send_concurrently(const char *buffer, ssize_t *size, const int flags){
-      if(!connected_ || *size == 0){
+      if(!connected_ || *size == 0 || (!is_tcp_ && !first_received_)){
         *size = 0;
         return false;
       }

@@ -1,12 +1,12 @@
 #ifndef RAMROD_NETWORK_COMMUNICATION_SERVER_H
 #define RAMROD_NETWORK_COMMUNICATION_SERVER_H
 
-#include <cstdint>       // for uint32_t, uint16_t
-#include <sys/types.h>   // for ssize_t
-#include <sys/socket.h>  // for recv, send, MSG_NOSIGNAL, accept
 #include <chrono>        // for duration
+#include <cstdint>       // for uint32_t, uint16_t
 #include <ratio>         // for milli
 #include <string>        // for string
+#include <sys/socket.h>  // for recv, send, MSG_NOSIGNAL, accept
+#include <sys/types.h>   // for ssize_t
 
 #include "ramrod/network_communication/conversor.h"
 
@@ -110,8 +110,8 @@ namespace ramrod {
        *                       or if some error occurs or if the remote side closes the
        *                       connection, etc. Don’t be mad with it.
        *
-       * @return The number of bytes actually received, or 0 when the server is disconnected,
-       *         or -1 on error (and `errno` will be set accordingly).
+       * @return The number of bytes actually received, or 0 when the server is disconnected or
+       *         size=0, or -1 on error (and `errno` will be set accordingly).
        */
       ssize_t receive(char *buffer, const ssize_t size, const int flags = 0);
       /**
@@ -141,8 +141,8 @@ namespace ramrod {
        *                       or if some error occurs or if the remote side closes the
        *                       connection, etc. Don’t be mad with it.
        *
-       * @return The number of bytes actually received, or 0 when the server is disconnected,
-       *         or -1 on error (and `errno` will be set accordingly).
+       * @return The number of bytes actually received, or 0 when the server is disconnected or
+       *         size=0, or -1 on error (and `errno` will be set accordingly).
        */
       ssize_t receive_all(char *buffer, const ssize_t size, bool *breaker = nullptr,
                           const int flags = 0);
@@ -176,7 +176,7 @@ namespace ramrod {
        *                       or if some error occurs or if the remote side closes the
        *                       connection, etc. Don’t be mad with it.
        *
-       * @return `false` if there is no open connection.
+       * @return `false` if there is no open connection, or if size=0
        */
       bool receive_all_concurrently(char *buffer, ssize_t *size, bool *breaker = nullptr,
                                     const int flags = 0);
@@ -205,7 +205,7 @@ namespace ramrod {
        *                       or if some error occurs or if the remote side closes the
        *                       connection, etc. Don’t be mad with it.
        *
-       * @return `false` if there is no open connection.
+       * @return `false` if there is no open connection, or if size=0
        */
       bool receive_concurrently(char *buffer, ssize_t *size, const int flags = 0);
       /**
@@ -238,8 +238,9 @@ namespace ramrod {
        *                        `receive()`ing, you’ll typically get the signal `SIGPIPE`.
        *                        Adding this flag prevents that signal from being raised.
        *
-       * @return The number of bytes actually received, or 0 when the server is disconnected,
-       *         or -1 on error (and `errno` will be set accordingly).
+       * @return The number of bytes actually received, or 0 when the server is disconnected
+       *         or if size=0, or if is UDP and you have not yet received a packet to obtain
+       *         client address information, or -1 on error (and `errno` will be set accordingly).
        */
       ssize_t send(const char *buffer, const ssize_t size, const int flags = MSG_NOSIGNAL);
       /**
@@ -266,8 +267,9 @@ namespace ramrod {
        *                        `receive()`ing, you’ll typically get the signal `SIGPIPE`.
        *                        Adding this flag prevents that signal from being raised.
        *
-       * @return The number of bytes actually received, or 0 when the server is disconnected,
-       *         or -1 on error (and `errno` will be set accordingly).
+       * @return The number of bytes actually received, or 0 when the server is disconnected
+       *         or if size=0, or if is UDP and you have not yet received a packet to obtain
+       *         client address information, or -1 on error (and `errno` will be set accordingly).
        */
       ssize_t send_all(const char *buffer, const ssize_t size, bool *breaker = nullptr,
                        const int flags = MSG_NOSIGNAL);
@@ -298,7 +300,8 @@ namespace ramrod {
        *                        `receive()`ing, you’ll typically get the signal `SIGPIPE`.
        *                        Adding this flag prevents that signal from being raised.
        *
-       * @return `false` if there is no open connection.
+       * @return `false` if there is no open connection, or if size=0, or if is UDP and
+       *         you have not yet received a packet to obtain client address information.
        */
       bool send_all_concurrently(const char *buffer, ssize_t *size, bool *breaker = nullptr,
                                  const int flags = MSG_NOSIGNAL);
@@ -324,7 +327,8 @@ namespace ramrod {
        *                        `receive()`ing, you’ll typically get the signal `SIGPIPE`.
        *                        Adding this flag prevents that signal from being raised.
        *
-       * @return `false` if there is no open connection.
+       * @return `false` if there is no open connection, or size is 0, or if is UDP and
+       *         you have not yet received a packet to obtain client address information.
        */
       bool send_concurrently(const char *buffer, ssize_t *size, const int flags = MSG_NOSIGNAL);
       /**
@@ -367,8 +371,9 @@ namespace ramrod {
       bool connected_;
       bool connecting_;
       bool is_tcp_;
-      struct addrinfo *client_;
-      struct addrinfo *results_;
+      addrinfo *client_;
+      addrinfo *results_;
+      bool first_received_;
       std::chrono::duration<long, std::milli> reconnection_time_;
     };
 
