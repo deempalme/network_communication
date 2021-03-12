@@ -10,6 +10,8 @@
 
 #include "ramrod/network_communication/conversor.h"
 
+struct addrinfo;
+
 namespace ramrod {
   namespace network_communication {
     class server : public conversor
@@ -365,6 +367,7 @@ namespace ramrod {
       bool connected_;
       bool connecting_;
       bool is_tcp_;
+      struct addrinfo *client_;
       std::chrono::duration<long, std::milli> reconnection_time_;
     };
 
