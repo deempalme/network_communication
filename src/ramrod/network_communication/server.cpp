@@ -43,7 +43,8 @@ namespace ramrod {
       disconnect();
     }
 
-    bool server::connect(const std::string ip, const int port, const int socket_type){
+    bool server::connect(const std::string ip, const int port, const int socket_type,
+                         const bool concurrent){
       if(connecting_) return false;
       if(connected_) disconnect();
 
@@ -55,7 +56,10 @@ namespace ramrod {
 
       terminate_concurrent_ = false;
 
-      std::thread(&server::concurrent_connector, this, true).detach();
+      if(concurrent)
+        std::thread(&server::concurrent_connector, this, true, false).detach();
+      else
+        concurrent_connector(true, true);
       return true;
     }
 
@@ -129,6 +133,8 @@ namespace ramrod {
       bool never{false};
       if(breaker == nullptr) breaker = &never;
 
+      // TODO: change recvfrom so it doesn't modifies client_ and check if the data comes
+      // from only for initial client_ and nobody elses
       while(total_received < size && !(*breaker)){
         if(is_tcp_)
           received_size = ::recv(connected_fd_, buffer + total_received,
@@ -182,7 +188,7 @@ namespace ramrod {
       return true;
     }
 
-    bool server::reconnect(){
+    bool server::reconnect(const bool concurrent){
       if(connecting_ || ip_.size() == 0 || port_ <= 0) return false;
 
       if(connected_) disconnect();
@@ -190,7 +196,10 @@ namespace ramrod {
       connecting_ = true;
       current_intent_ = 0;
 
-      std::thread(&server::concurrent_connector, this, true).detach();
+      if(concurrent)
+        std::thread(&server::concurrent_connector, this, true, false).detach();
+      else
+        concurrent_connector(true, true);
       return true;
     }
 
@@ -327,7 +336,7 @@ namespace ramrod {
       return !(connected_ = false);
     }
 
-    void server::concurrent_connector(const bool force){
+    void server::concurrent_connector(const bool force, const bool wait){
       if(!force && terminate_concurrent_){
         terminate_concurrent_ = false;
         return;
@@ -393,7 +402,12 @@ namespace ramrod {
         if(terminate_concurrent_) return;
 
         rr::attention("Reconnecting!");
-        std::thread(&server::concurrent_connector, this, false).detach();
+
+        if(wait)
+          concurrent_connector(false, true);
+        else
+          std::thread(&server::concurrent_connector, this, false, false).detach();
+
         return;
       }
 
@@ -446,7 +460,10 @@ namespace ramrod {
         return;
       }
       // In case is TCP then we must accept an incomming connection
-      std::thread(&server::concurrent_connection, this).detach();
+      if(wait)
+        concurrent_connection();
+      else
+        std::thread(&server::concurrent_connection, this).detach();
     }
 
     void server::concurrent_connection(){

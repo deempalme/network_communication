@@ -29,11 +29,15 @@ namespace ramrod {
        * @param socket_type Defines the type of connection TCP or UDP, options:
        *                      SOCK_STREAM   Creates a TCP socket
        *                      SOCK_DGRAM    Creates a connected datagram socket
-       * 
+       * @param concurrent  Indicates if the connection should be made in a different
+       *                    thread, in this way the main thread should not await for the
+       *                    server to connect with us
+       *
        * @return `false` if there is already a pending connection open, call `disconnect()`
        *         to cancel such connection
        */
-      bool connect(const std::string ip, const int port = 1313, const int socket_type = SOCK_STREAM);
+      bool connect(const std::string ip, const int port = 1313,
+                   const int socket_type = SOCK_STREAM, const bool concurrent = true);
       /**
        * @brief Disconnects this device from the current connected network's device
        *
@@ -213,10 +217,14 @@ namespace ramrod {
        * to the network's device selected in the function `connect()`, and, as in `connect()`
        * it will also be performed in a different thread.
        *
+       * @param concurrent Indicates if the reconnection should be made in a different thread,
+       *                   in this way the main thread should not await for the server to
+       *                   connect with us
+       *
        * @return `false` if there is an open pending connection, or already
        *          waiting for connection, or there is no IP or port selected
        */
-      bool reconnect();
+      bool reconnect(const bool concurrent = true);
       /**
        * @brief Sends data to a TCP socket stream
        *
@@ -343,7 +351,7 @@ namespace ramrod {
     private:
       bool close();
 
-      void concurrent_connector(const bool force = true);
+      void concurrent_connector(const bool force = true, const bool wait = false);
 
       void concurrent_receive(char *buffer, ssize_t *size, const int flags);
       void concurrent_receive_all(char *buffer, ssize_t *size, bool *breaker, const int flags);

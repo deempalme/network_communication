@@ -40,7 +40,8 @@ namespace ramrod {
       disconnect();
     }
 
-    bool client::connect(const std::string ip, const int port, const int socket_type){
+    bool client::connect(const std::string ip, const int port, const int socket_type,
+                         const bool concurrent){
       if(connecting_) return false;
       if(connected_) disconnect();
 
@@ -52,7 +53,10 @@ namespace ramrod {
 
       terminate_concurrent_ = false;
 
-      std::thread(&client::concurrent_connector, this, true).detach();
+      if(concurrent)
+        std::thread(&client::concurrent_connector, this, true, false).detach();
+      else
+        concurrent_connector(true, true);
       return true;
     }
 
@@ -164,7 +168,7 @@ namespace ramrod {
       return true;
     }
 
-    bool client::reconnect(){
+    bool client::reconnect(const bool concurrent){
       if(connecting_ || ip_.size() == 0 || port_ <= 0) return false;
 
       if(connected_) disconnect();
@@ -172,7 +176,10 @@ namespace ramrod {
       connecting_ = true;
       current_intent_ = 0;
 
-      std::thread(&client::concurrent_connector, this, true).detach();
+      if(concurrent)
+        std::thread(&client::concurrent_connector, this, true, false).detach();
+      else
+        concurrent_connector(true, true);
       return true;
     }
 
@@ -279,7 +286,7 @@ namespace ramrod {
       return !(connected_ = false);
     }
 
-    void client::concurrent_connector(const bool force){
+    void client::concurrent_connector(const bool force, const bool wait){
       if(!force && terminate_concurrent_){
         terminate_concurrent_ = false;
         return;
@@ -338,7 +345,12 @@ namespace ramrod {
         if(terminate_concurrent_) return;
 
         rr::attention("Reconnecting!");
-        std::thread(&client::concurrent_connector, this, false).detach();
+
+        if(wait)
+          concurrent_connector(false, true);
+        else
+          std::thread(&client::concurrent_connector, this, false, false).detach();
+
         return;
       }
 
