@@ -69,6 +69,7 @@ namespace ramrod {
       terminate_concurrent_ = true;
 
       if(results_) ::freeaddrinfo(results_);
+      results_ = nullptr;
 
       return close_child() & close();
     }
@@ -382,7 +383,10 @@ namespace ramrod {
         break;
       }
 
-      if(is_tcp_) ::freeaddrinfo(results_); // all done with this structure
+      if(is_tcp_){
+        ::freeaddrinfo(results_); // all done with this structure
+        results_ = nullptr;
+      }
 
       if(client_ == nullptr){
         if(results_) freeaddrinfo(results_);
