@@ -196,6 +196,7 @@ namespace ramrod {
 
       connecting_ = true;
       current_intent_ = 0;
+      terminate_concurrent_ = true;
 
       if(concurrent)
         std::thread(&server::concurrent_connector, this, true, false).detach();
