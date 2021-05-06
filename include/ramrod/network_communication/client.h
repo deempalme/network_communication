@@ -36,7 +36,7 @@ namespace ramrod {
        * @return `false` if there is already a pending connection open, call `disconnect()`
        *         to cancel such connection
        */
-      bool connect(const std::string ip, const int port = 1313,
+      bool connect(const std::string &ip, const int port = 1313,
                    const int socket_type = SOCK_STREAM, const bool concurrent = true);
       /**
        * @brief Disconnects this device from the current connected network's device

@@ -43,7 +43,7 @@ namespace ramrod {
       disconnect();
     }
 
-    bool server::connect(const std::string ip, const int port, const int socket_type,
+    bool server::connect(const std::string &ip, const int port, const int socket_type,
                          const bool concurrent){
       if(connecting_) return false;
       if(connected_) disconnect();
