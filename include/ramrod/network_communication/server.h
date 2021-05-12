@@ -1,12 +1,12 @@
-#ifndef RAMROD_NETWORK_COMMUNICATION_SERVER_H
+﻿#ifndef RAMROD_NETWORK_COMMUNICATION_SERVER_H
 #define RAMROD_NETWORK_COMMUNICATION_SERVER_H
+
+#include <winsock2.h>
 
 #include <chrono>        // for duration
 #include <cstdint>       // for uint32_t, uint16_t
 #include <ratio>         // for milli
 #include <string>        // for string
-#include <sys/socket.h>  // for recv, send, MSG_NOSIGNAL, accept
-#include <sys/types.h>   // for ssize_t
 
 #include "ramrod/network_communication/conversor.h"
 
@@ -117,7 +117,7 @@ namespace ramrod {
        * @return The number of bytes actually received, or 0 when the server is disconnected or
        *         size=0, or -1 on error (and `errno` will be set accordingly).
        */
-      ssize_t receive(char *buffer, const ssize_t size, const int flags = 0);
+      int receive(char *buffer, const int size, const int flags = 0);
       /**
        * @brief Receives all required sized data from a TCP socket stream
        *
@@ -148,8 +148,8 @@ namespace ramrod {
        * @return The number of bytes actually received, or 0 when the server is disconnected or
        *         size=0, or -1 on error (and `errno` will be set accordingly).
        */
-      ssize_t receive_all(char *buffer, const ssize_t size, bool *breaker = nullptr,
-                          const int flags = 0);
+      int receive_all(char *buffer, const int size, bool *breaker = nullptr,
+                      const int flags = 0);
       /**
        * @brief Receives all required sized data from a TCP socket stream in a different thread
        *
@@ -182,7 +182,7 @@ namespace ramrod {
        *
        * @return `false` if there is no open connection, or if size=0
        */
-      bool receive_all_concurrently(char *buffer, ssize_t *size, bool *breaker = nullptr,
+      bool receive_all_concurrently(char *buffer, int *size, bool *breaker = nullptr,
                                     const int flags = 0);
       /**
        * @brief Receives all required sized data from a TCP socket stream
@@ -211,7 +211,7 @@ namespace ramrod {
        *
        * @return `false` if there is no open connection, or if size=0
        */
-      bool receive_concurrently(char *buffer, ssize_t *size, const int flags = 0);
+      bool receive_concurrently(char *buffer, int *size, const int flags = 0);
       /**
        * @brief Reconnecting again
        *
@@ -239,18 +239,12 @@ namespace ramrod {
        *                        and it can then receive this data without first receiving all
        *                        the rest of the normal data in the queue.
        *          MSG_DONTROUTE Don’t send this data over a router, just keep it local.
-       *          MSG_DONTWAIT  If `send()` would block because outbound traffic is clogged, have
-       *                        it return `EAGAIN`. This is like a “enable non-blocking just for
-       *                        this send.”
-       *          MSG_NOSIGNAL  If you `send()` to a remote host which is no longer
-       *                        `receive()`ing, you’ll typically get the signal `SIGPIPE`.
-       *                        Adding this flag prevents that signal from being raised.
        *
        * @return The number of bytes actually received, or 0 when the server is disconnected
        *         or if size=0, or if is UDP and you have not yet received a packet to obtain
        *         client address information, or -1 on error (and `errno` will be set accordingly).
        */
-      ssize_t send(const char *buffer, const ssize_t size, const int flags = MSG_NOSIGNAL);
+      int send(const char *buffer, const int size, const int flags = 0);
       /**
        * @brief Sends all required sized data to a TCP socket stream
        *
@@ -268,19 +262,12 @@ namespace ramrod {
        *                        and it can then receive this data without first receiving all
        *                        the rest of the normal data in the queue.
        *          MSG_DONTROUTE Don’t send this data over a router, just keep it local.
-       *          MSG_DONTWAIT  If `send()` would block because outbound traffic is clogged, have
-       *                        it return `EAGAIN`. This is like a “enable non-blocking just for
-       *                        this send.”
-       *          MSG_NOSIGNAL  If you `send()` to a remote host which is no longer
-       *                        `receive()`ing, you’ll typically get the signal `SIGPIPE`.
-       *                        Adding this flag prevents that signal from being raised.
        *
        * @return The number of bytes actually received, or 0 when the server is disconnected
        *         or if size=0, or if is UDP and you have not yet received a packet to obtain
        *         client address information, or -1 on error (and `errno` will be set accordingly).
        */
-      ssize_t send_all(const char *buffer, const ssize_t size, bool *breaker = nullptr,
-                       const int flags = MSG_NOSIGNAL);
+      int send_all(const char *buffer, const int size, bool *breaker = nullptr, const int flags = 0);
       /**
        * @brief Sends all required sized data to a TCP socket stream in a different thread
        *
@@ -301,18 +288,12 @@ namespace ramrod {
        *                        and it can then receive this data without first receiving all
        *                        the rest of the normal data in the queue.
        *          MSG_DONTROUTE Don’t send this data over a router, just keep it local.
-       *          MSG_DONTWAIT  If `send()` would block because outbound traffic is clogged, have
-       *                        it return `EAGAIN`. This is like a “enable non-blocking just for
-       *                        this send.”
-       *          MSG_NOSIGNAL  If you `send()` to a remote host which is no longer
-       *                        `receive()`ing, you’ll typically get the signal `SIGPIPE`.
-       *                        Adding this flag prevents that signal from being raised.
        *
        * @return `false` if there is no open connection, or if size=0, or if is UDP and
        *         you have not yet received a packet to obtain client address information.
        */
-      bool send_all_concurrently(const char *buffer, ssize_t *size, bool *breaker = nullptr,
-                                 const int flags = MSG_NOSIGNAL);
+      bool send_all_concurrently(const char *buffer, int *size, bool *breaker = nullptr,
+                                 const int flags = 0);
       /**
        * @brief Sends data to a TCP socket stream in a different thread
        *
@@ -328,17 +309,11 @@ namespace ramrod {
        *                        and it can then receive this data without first receiving all
        *                        the rest of the normal data in the queue.
        *          MSG_DONTROUTE Don’t send this data over a router, just keep it local.
-       *          MSG_DONTWAIT  If `send()` would block because outbound traffic is clogged, have
-       *                        it return `EAGAIN`. This is like a “enable non-blocking just for
-       *                        this send.”
-       *          MSG_NOSIGNAL  If you `send()` to a remote host which is no longer
-       *                        `receive()`ing, you’ll typically get the signal `SIGPIPE`.
-       *                        Adding this flag prevents that signal from being raised.
        *
        * @return `false` if there is no open connection, or size is 0, or if is UDP and
        *         you have not yet received a packet to obtain client address information.
        */
-      bool send_concurrently(const char *buffer, ssize_t *size, const int flags = MSG_NOSIGNAL);
+      bool send_concurrently(const char *buffer, int *size, const int flags = 0);
       /**
        * @brief Gettting the current time that this device will wait to try to connect
        *        again if the previous intent to establish a connection failed
@@ -361,15 +336,15 @@ namespace ramrod {
       void concurrent_connector(const bool force = true, const bool wait = false);
       void concurrent_connection();
 
-      void concurrent_receive(char *buffer, ssize_t *size, const int flags);
-      void concurrent_receive_all(char *buffer, ssize_t *size, bool *breaker, const int flags);
-      void concurrent_send(const char *buffer, ssize_t *size, const int flags);
-      void concurrent_send_all(const char *buffer, ssize_t *size, bool *breaker, const int flags);
+      void concurrent_receive(char *buffer, int *size, const int flags);
+      void concurrent_receive_all(char *buffer, int *size, bool *breaker, const int flags);
+      void concurrent_send(const char *buffer, int *size, const int flags);
+      void concurrent_send_all(const char *buffer, int *size, bool *breaker, const int flags);
 
       std::string ip_;
       int port_;
-      int socket_fd_;
-      int connected_fd_;
+      SOCKET socket_fd_;
+      SOCKET connected_fd_;
       int max_queue_;
       std::uint32_t current_intent_;
       std::uint32_t max_intents_;
@@ -383,9 +358,6 @@ namespace ramrod {
       addrinfo *results_;
       std::chrono::duration<long, std::milli> reconnection_time_;
     };
-
-    void signal_children_handler(const int signal);
-
   } // namespace: network_communication
 } // namespace: ramrod
 

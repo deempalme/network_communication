@@ -1,6 +1,6 @@
-#include "ramrod/network_communication/conversor.h"
+﻿#include "ramrod/network_communication/conversor.h"
 
-#include <netinet/in.h>  // for htonl, htons, ntohl, ntohs
+#include <winsock2.h>  // for htonl, htons, ntohl, ntohs
 
 namespace ramrod {
   namespace network_communication {
@@ -19,5 +19,5 @@ namespace ramrod {
     std::uint32_t conversor::network_to_host(const std::uint32_t network_value){
       return ::ntohl(network_value);
     }
-  } // namespace: network_communication 
+  } // namespace: network_communication
 } // namespace: ramrod

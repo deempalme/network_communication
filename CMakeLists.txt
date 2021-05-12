@@ -1,4 +1,4 @@
-#cmake version
+﻿#cmake version
 cmake_minimum_required(VERSION 3.12...3.15)
 
 if(NOT TARGET ${RamRodNetwork_LIBRARIES})
@@ -50,62 +50,5 @@ if(NOT TARGET ${RamRodNetwork_LIBRARIES})
   )
 
   target_compile_features(${PROJECT_NAME} PRIVATE cxx_std_17)
-
-  if(CMAKE_BUILD_TYPE MATCHES Debug)
-    # Allows the program to print in console/terminal detailed error's explanations
-    target_compile_definitions(${PROJECT_NAME}
-      PRIVATE
-        VERBOSE=True
-    )
-
-    # TODO: delete this after finishing code
-    message(WARNING "Compiling warnings in debug mode: ${CMAKE_BUILD_TYPE}")
-
-    target_compile_options(${PROJECT_NAME}
-      PRIVATE
-      -Wall
-      -Wextra
-      -Wundef
-      -Wpedantic
-      -Wconversion
-      -Wcast-align
-      -Wfloat-equal
-      -Wpointer-arith
-      -Wsign-conversion
-      -Wunreachable-code
-      -Wunused-function
-      -Wignored-qualifiers
-    )
-
-    ##########################
-    ## include-what-you-use ##
-    ##########################
-
-    if(${CMAKE_HOST_SYSTEM_NAME} MATCHES "Linux")
-      find_program(iwyu_path NAMES include-what-you-use iwyu)
-      if(NOT iwyu_path)
-        message(FATAL_ERROR "Could not find the program include-what-you-use")
-      else()
-        message(STATUS "include-what-you-use found: ${iwyu_path}")
-        get_filename_component(PARENT_DIR ${iwyu_path} DIRECTORY)
-        get_filename_component(G_PARENT_DIR ${PARENT_DIR} DIRECTORY)
-        set(iwyu_share_path ${G_PARENT_DIR}/share/include-what-you-use)
-        message("iwyu share path: ${iwyu_share_path}")
-        set(iwyu_path_and_options
-          ${iwyu_path}
-          -Xiwyu
-          --mapping_file=${iwyu_share_path}/boost-all.imp
-          -Xiwyu
-          --mapping_file=${iwyu_share_path}/boost-all-private.imp
-        )
-        set_target_properties(
-          ${PROJECT_NAME}
-          PROPERTIES
-          CXX_INCLUDE_WHAT_YOU_USE
-          "${iwyu_path_and_options}"
-        )
-      endif(NOT iwyu_path)
-    endif(${CMAKE_HOST_SYSTEM_NAME} MATCHES "Linux")
-  endif(CMAKE_BUILD_TYPE MATCHES Debug)
 
 endif(NOT TARGET ${RamRodNetwork_LIBRARIES})
