@@ -221,8 +221,8 @@ namespace ramrod {
        *                   in this way the main thread should not await for the server to
        *                   connect with us
        *
-       * @return `false` if there is an open pending connection, or already
-       *          waiting for connection, or there is no IP or port selected
+       * @return `false` if there is no IP or port selected, it will return `true` if
+       *          there is an open pending connection, or already waiting for connection
        */
       bool reconnect(const bool concurrent = true);
       /**

@@ -189,8 +189,8 @@ namespace ramrod {
     }
 
     bool server::reconnect(const bool concurrent){
-      if(connecting_ || ip_.size() == 0 || port_ <= 0) return false;
-
+      if(ip_.size() == 0 || port_ <= 0) return false;
+      if(connecting_) return true;
       if(connected_) disconnect();
 
       connecting_ = true;
