@@ -104,9 +104,8 @@ namespace ramrod {
 
       ssize_t received{::recv(socket_fd_, buffer, static_cast<std::size_t>(size), flags)};
 #ifdef VERBOSE
-      if(received < 0) rr::perror("Receiving data");
+      if(received <= 0) rr::perror("Receiving data");
 #endif
-      if(received == 0) disconnect();
       return received;
     }
 
@@ -126,10 +125,9 @@ namespace ramrod {
         if((received_size = ::recv(socket_fd_, buffer + total_received,
                                    static_cast<std::size_t>(bytes_left), flags)) <= 0){
           // The server has disconnected and therefore disconnecting client
-          if(received_size == 0){
-            disconnect();
+          if(received_size == 0)
             return 0;
-          }
+
 #ifdef VERBOSE
           rr::perror("Receiving data");
 #endif
@@ -189,9 +187,8 @@ namespace ramrod {
 
       ssize_t sent{::send(socket_fd_, buffer, static_cast<std::size_t>(size), flags)};
 #ifdef VERBOSE
-      if(sent < 0) rr::perror("Sending data");
+      if(sent <= 0) rr::perror("Sending data");
 #endif
-      if(sent == 0) disconnect();
       return sent;
     }
 
@@ -211,10 +208,9 @@ namespace ramrod {
         if((sent_size = ::send(socket_fd_, buffer + total_sent,
                                static_cast<std::size_t>(bytes_left), flags)) <= 0){
           // The server has disconnected and therefore disconnecting client
-          if(sent_size == 0){
-            disconnect();
+          if(sent_size == 0)
             return 0;
-          }
+
 #ifdef VERBOSE
           rr::perror("Sending data");
 #endif
@@ -387,9 +383,8 @@ namespace ramrod {
     void client::concurrent_receive(char *buffer, ssize_t *size, const int flags){
       ssize_t received{::recv(socket_fd_, buffer, static_cast<std::size_t>(*size), flags)};
 #ifdef VERBOSE
-      if(received < 0) rr::perror("Receiving data");
+      if(received <= 0) rr::perror("Receiving data");
 #endif
-      if(received == 0) disconnect();
       *size = received;
     }
 
@@ -408,7 +403,6 @@ namespace ramrod {
           // The server has disconnected and therefore disconnecting client
           if(received_size == 0){
             *size = 0;
-            disconnect();
             return;
           }
 #ifdef VERBOSE
@@ -433,9 +427,8 @@ namespace ramrod {
     void client::concurrent_send(const char *buffer, ssize_t *size, const int flags){
       ssize_t sent{::send(socket_fd_, buffer, static_cast<std::size_t>(*size), flags)};
 #ifdef VERBOSE
-      if(sent < 0) rr::perror("Sending data");
+      if(sent <= 0) rr::perror("Sending data");
 #endif
-      if(sent == 0) disconnect();
       *size = sent;
     }
 
@@ -451,10 +444,8 @@ namespace ramrod {
       while(total_sent < *size && !terminate_send_.load() && !(*breaker)){
         if((sent_size = ::send(socket_fd_, buffer + total_sent,
                                static_cast<std::size_t>(bytes_left), flags)) <= 0){
-          // The server has disconnected and therefore disconnecting client
           if(sent_size == 0){
             *size = 0;
-            disconnect();
             return;
           }
 #ifdef VERBOSE

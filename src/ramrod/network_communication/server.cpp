@@ -116,9 +116,8 @@ namespace ramrod {
         received = ::recvfrom(socket_fd_, buffer, size, flags,
                               client_->ai_addr, &client_->ai_addrlen);
 #ifdef VERBOSE
-      if(received < 0) rr::perror("Receiving data " + std::to_string(socket_fd_) + " : " + std::to_string(connected_fd_));
+      if(received <= 0) rr::perror("Receiving data " + std::to_string(socket_fd_) + " : " + std::to_string(connected_fd_));
 #endif
-      if(received == 0) disconnect();
       return received;
     }
 
@@ -143,11 +142,8 @@ namespace ramrod {
         else
           received_size = ::recvfrom(socket_fd_, (std::uint8_t*)buffer + total_received,
                                      bytes_left, flags, client_->ai_addr, &client_->ai_addrlen);
-        // The client has disconnected and therefore disconnecting server
-        if(received_size == 0){
-          disconnect();
+        if(received_size == 0)
           return 0;
-        }
 
         if(received_size < 0){
 #ifdef VERBOSE
@@ -211,9 +207,8 @@ namespace ramrod {
       ssize_t sent{::sendto(connected_fd_, buffer, size, flags,
                             client_->ai_addr, client_->ai_addrlen)};
 #ifdef VERBOSE
-      if(sent < 0) rr::perror("Sending data");
+      if(sent <= 0) rr::perror("Sending data");
 #endif
-      if(sent == 0) disconnect();
       return sent;
     }
 
@@ -232,12 +227,8 @@ namespace ramrod {
       while(total_sent < size && !(*breaker)){
         sent_size = ::sendto(connected_fd_, (std::uint8_t*)buffer + total_sent,
                              bytes_left, flags, client_->ai_addr, client_->ai_addrlen);
-
-        // The client has disconnected and therefore disconnecting server
-        if(sent_size == 0){
-          disconnect();
+        if(sent_size == 0)
           return 0;
-        }
 
         if(sent_size < 0){
 #ifdef VERBOSE
@@ -507,9 +498,8 @@ namespace ramrod {
         received = ::recvfrom(socket_fd_, buffer, *size, flags,
                               client_->ai_addr, &client_->ai_addrlen);
 #ifdef VERBOSE
-      if(received < 0) rr::perror("Receiving data");
+      if(received <= 0) rr::perror("Receiving data");
 #endif
-      if(received == 0) disconnect();
       *size = static_cast<std::size_t>(received);
     }
 
@@ -529,10 +519,8 @@ namespace ramrod {
         else
           received_size = ::recvfrom(socket_fd_, (std::uint8_t*)buffer + total_received,
                                      bytes_left, flags, client_->ai_addr, &client_->ai_addrlen);
-        // The client has disconnected and therefore disconnecting server
         if(received_size == 0){
           *size = 0;
-          disconnect();
           return;
         }
 
@@ -560,9 +548,8 @@ namespace ramrod {
       ssize_t sent{::sendto(connected_fd_, buffer, *size, flags,
                             client_->ai_addr, client_->ai_addrlen)};
 #ifdef VERBOSE
-      if(sent < 0) rr::perror("Sending data");
+      if(sent <= 0) rr::perror("Sending data");
 #endif
-      if(sent == 0) disconnect();
       *size = static_cast<std::size_t>(sent);
     }
 
@@ -578,10 +565,8 @@ namespace ramrod {
       while(total_sent < *size && !terminate_send_.load() && !(*breaker)){
         sent_size = ::sendto(connected_fd_, (std::uint8_t*)buffer + total_sent,
                              bytes_left, flags, client_->ai_addr, client_->ai_addrlen);
-        // The client has disconnected and therefore disconnecting server
         if(sent_size == 0){
           *size = 0;
-          disconnect();
           return;
         }
 
