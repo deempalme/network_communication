@@ -42,16 +42,16 @@ namespace ramrod {
 
     bool client::connect(const std::string &ip, const int port, const int socket_type,
                          const bool concurrent){
-      if(connecting_) return false;
-      if(connected_) disconnect();
+      if(connecting_.load()) return false;
+      if(connected_.load()) disconnect();
 
       ip_ = ip;
       port_ = port;
-      connecting_ = true;
+      connecting_.store(true);
       current_intent_ = 0;
       is_tcp_ = socket_type != SOCK_DGRAM;
 
-      terminate_concurrent_ = false;
+      terminate_concurrent_.store(false);
 
       if(concurrent)
         std::thread(&client::concurrent_connector, this, true, false).detach();
@@ -61,9 +61,9 @@ namespace ramrod {
     }
 
     bool client::disconnect(){
-      terminate_send_ = true;
-      terminate_receive_ = true;
-      terminate_concurrent_ = true;
+      terminate_send_.store(true);
+      terminate_receive_.store(true);
+      terminate_concurrent_.store(true);
 
       return close();
     }
@@ -73,7 +73,7 @@ namespace ramrod {
     }
 
     bool client::is_connected(){
-      return connected_;
+      return connected_.load(std::memory_order_relaxed);
     }
 
     int client::max_queue(){
@@ -99,7 +99,7 @@ namespace ramrod {
     }
 
     ssize_t client::receive(char *buffer, const ssize_t size, const int flags){
-      if(!connected_ || size == 0)
+      if(!connected_.load() || size == 0)
         return 0;
 
       ssize_t received{::recv(socket_fd_, buffer, static_cast<std::size_t>(size), flags)};
@@ -112,7 +112,7 @@ namespace ramrod {
 
     ssize_t client::receive_all(char *buffer, const ssize_t size, bool *breaker,
                                 const int flags){
-      if(!connected_ || size == 0)
+      if(!connected_.load() || size == 0)
         return 0;
 
       ssize_t total_received{0};
@@ -149,7 +149,7 @@ namespace ramrod {
 
     bool client::receive_all_concurrently(char *buffer, ssize_t *size, bool *breaker,
                                           const int flags){
-      if(!connected_ || *size == 0){
+      if(!connected_.load() || *size == 0){
         *size = 0;
         return false;
       }
@@ -159,7 +159,7 @@ namespace ramrod {
     }
 
     bool client::receive_concurrently(char *buffer, ssize_t *size, const int flags){
-      if(!connected_ || *size == 0){
+      if(!connected_.load() || *size == 0){
         *size = 0;
         return false;
       }
@@ -170,10 +170,10 @@ namespace ramrod {
 
     bool client::reconnect(const bool concurrent){
       if(ip_.size() == 0 || port_ <= 0) return false;
-      if(connecting_) return true;
-      if(connected_) disconnect();
+      if(connecting_.load()) return true;
+      if(connected_.load()) disconnect();
 
-      connecting_ = true;
+      connecting_.store(true);
       current_intent_ = 0;
 
       if(concurrent)
@@ -184,7 +184,7 @@ namespace ramrod {
     }
 
     ssize_t client::send(const char *buffer, const ssize_t size, const int flags){
-      if(!connected_ || size == 0)
+      if(!connected_.load() || size == 0)
         return 0;
 
       ssize_t sent{::send(socket_fd_, buffer, static_cast<std::size_t>(size), flags)};
@@ -197,7 +197,7 @@ namespace ramrod {
 
     ssize_t client::send_all(const char *buffer, const ssize_t size, bool *breaker,
                              const int flags){
-      if(!connected_ || size == 0)
+      if(!connected_.load() || size == 0)
         return 0;
 
       ssize_t total_sent{0};
@@ -234,7 +234,7 @@ namespace ramrod {
 
     bool client::send_all_concurrently(const char *buffer, ssize_t *size, bool *breaker,
                                        const int flags){
-      if(!connected_ || *size == 0){
+      if(!connected_.load() || *size == 0){
         *size = 0;
         return false;
       }
@@ -244,7 +244,7 @@ namespace ramrod {
     }
 
     bool client::send_concurrently(const char *buffer, ssize_t *size, const int flags){
-      if(!connected_ || *size == 0){
+      if(!connected_.load() || *size == 0){
         *size = 0;
         return false;
       }
@@ -283,15 +283,16 @@ namespace ramrod {
       }
 
       socket_fd_ = -1;
-      return !(connected_ = false);
+      connected_.store(false);
+      return true;
     }
 
     void client::concurrent_connector(const bool force, const bool wait){
-      if(!force && terminate_concurrent_){
-        terminate_concurrent_ = false;
+      if(!force && terminate_concurrent_.load()){
+        terminate_concurrent_.store(false);
         return;
       }
-      if(connected_) return;
+      if(connected_.load()) return;
 
       int status;
       struct addrinfo hints;
@@ -342,7 +343,7 @@ namespace ramrod {
         std::this_thread::sleep_for(reconnection_time_);
 
         // Terminates the pending connection in case disconnect() is called:
-        if(terminate_concurrent_) return;
+        if(terminate_concurrent_.load()) return;
 
         rr::attention("Reconnecting!");
 
@@ -374,10 +375,10 @@ namespace ramrod {
 #endif
       }
 
-      connected_ = true;
-      connecting_ = false;
-      terminate_receive_ = false;
-      terminate_send_ = false;
+      connected_.store(true);
+      connecting_.store(false);
+      terminate_receive_.store(false);
+      terminate_send_.store(false);
 #ifdef VERBOSE
       rr::attention("Connected to server!");
 #endif
@@ -401,7 +402,7 @@ namespace ramrod {
       bool never{false};
       if(breaker == nullptr) breaker = &never;
 
-      while(total_received < *size && !terminate_send_ && !(*breaker)){
+      while(total_received < *size && !terminate_receive_.load() && !(*breaker)){
         if((received_size = ::recv(socket_fd_, buffer + total_received,
                                    static_cast<std::size_t>(bytes_left), flags)) <= 0){
           // The server has disconnected and therefore disconnecting client
@@ -447,7 +448,7 @@ namespace ramrod {
       bool never{false};
       if(breaker == nullptr) breaker = &never;
 
-      while(total_sent < *size && !terminate_send_ && !(*breaker)){
+      while(total_sent < *size && !terminate_send_.load() && !(*breaker)){
         if((sent_size = ::send(socket_fd_, buffer + total_sent,
                                static_cast<std::size_t>(bytes_left), flags)) <= 0){
           // The server has disconnected and therefore disconnecting client

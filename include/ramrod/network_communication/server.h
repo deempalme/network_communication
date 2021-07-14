@@ -1,6 +1,7 @@
 #ifndef RAMROD_NETWORK_COMMUNICATION_SERVER_H
 #define RAMROD_NETWORK_COMMUNICATION_SERVER_H
 
+#include <atomic>        // for atomic
 #include <chrono>        // for duration
 #include <cstdint>       // for uint32_t, uint16_t
 #include <ratio>         // for milli
@@ -373,11 +374,11 @@ namespace ramrod {
       int max_queue_;
       std::uint32_t current_intent_;
       std::uint32_t max_intents_;
-      bool terminate_concurrent_;
-      bool terminate_receive_;
-      bool terminate_send_;
-      bool connected_;
-      bool connecting_;
+      std::atomic<bool> terminate_concurrent_;
+      std::atomic<bool> terminate_receive_;
+      std::atomic<bool> terminate_send_;
+      std::atomic<bool> connected_;
+      std::atomic<bool> connecting_;
       bool is_tcp_;
       addrinfo *client_;
       addrinfo *results_;

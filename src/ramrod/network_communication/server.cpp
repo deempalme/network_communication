@@ -45,16 +45,16 @@ namespace ramrod {
 
     bool server::connect(const std::string &ip, const int port, const int socket_type,
                          const bool concurrent){
-      if(connecting_) return false;
-      if(connected_) disconnect();
+      if(connecting_.load()) return false;
+      if(connected_.load()) disconnect();
 
       ip_ = ip;
       port_ = port;
-      connecting_ = true;
+      connecting_.store(true);
       current_intent_ = 0;
       is_tcp_ = socket_type != SOCK_DGRAM;
 
-      terminate_concurrent_ = false;
+      terminate_concurrent_.store(false);
 
       if(concurrent)
         std::thread(&server::concurrent_connector, this, true, false).detach();
@@ -64,9 +64,9 @@ namespace ramrod {
     }
 
     bool server::disconnect(){
-      terminate_send_ = true;
-      terminate_receive_ = true;
-      terminate_concurrent_ = true;
+      terminate_send_.store(true);
+      terminate_receive_.store(true);
+      terminate_concurrent_.store(true);
 
       if(results_) ::freeaddrinfo(results_);
       results_ = nullptr;
@@ -79,7 +79,7 @@ namespace ramrod {
     }
 
     bool server::is_connected(){
-      return connected_;
+      return connected_.load(std::memory_order_relaxed);
     }
 
     int server::max_queue(){
@@ -105,7 +105,7 @@ namespace ramrod {
     }
 
     ssize_t server::receive(void *buffer, const std::size_t size, const int flags){
-      if(!connected_ || size == 0)
+      if(!connected_.load() || size == 0)
         return 0;
 
       ssize_t received{0};
@@ -124,7 +124,7 @@ namespace ramrod {
 
     ssize_t server::receive_all(void *buffer, const std::size_t size, bool *breaker,
                                 const int flags){
-      if(!connected_ || size == 0)
+      if(!connected_.load() || size == 0)
         return 0;
 
       std::size_t total_received{0};
@@ -169,7 +169,7 @@ namespace ramrod {
 
     bool server::receive_all_concurrently(void *buffer, std::size_t *size, bool *breaker,
                                           const int flags){
-      if(!connected_ || *size == 0){
+      if(!connected_.load() || *size == 0){
         *size = 0;
         return false;
       }
@@ -179,7 +179,7 @@ namespace ramrod {
     }
 
     bool server::receive_concurrently(void *buffer, std::size_t *size, const int flags){
-      if(!connected_ || *size == 0){
+      if(!connected_.load() || *size == 0){
         *size = 0;
         return false;
       }
@@ -190,12 +190,12 @@ namespace ramrod {
 
     bool server::reconnect(const bool concurrent){
       if(ip_.size() == 0 || port_ <= 0) return false;
-      if(connecting_) return true;
-      if(connected_) disconnect();
+      if(connecting_.load()) return true;
+      if(connected_.load()) disconnect();
 
-      connecting_ = true;
+      connecting_.store(true);
       current_intent_ = 0;
-      terminate_concurrent_ = true;
+      terminate_concurrent_.store(true);
 
       if(concurrent)
         std::thread(&server::concurrent_connector, this, true, false).detach();
@@ -205,7 +205,7 @@ namespace ramrod {
     }
 
     ssize_t server::send(void *buffer, const std::size_t size, const int flags){
-      if(!connected_ || size == 0)
+      if(!connected_.load() || size == 0)
         return 0;
 
       ssize_t sent{::sendto(connected_fd_, buffer, size, flags,
@@ -219,7 +219,7 @@ namespace ramrod {
 
     ssize_t server::send_all(void *buffer, const std::size_t size, bool *breaker,
                              const int flags){
-      if(!connected_ || size == 0)
+      if(!connected_.load() || size == 0)
         return 0;
 
       std::size_t total_sent{0};
@@ -259,7 +259,7 @@ namespace ramrod {
 
     bool server::send_all_concurrently(const void *buffer, std::size_t *size, bool *breaker,
                                        const int flags){
-      if(!connected_ || *size == 0){
+      if(!connected_.load() || *size == 0){
         *size = 0;
         return false;
       }
@@ -269,7 +269,7 @@ namespace ramrod {
     }
 
     bool server::send_concurrently(const void *buffer, std::size_t *size, const int flags){
-      if(!connected_ || *size == 0){
+      if(!connected_.load() || *size == 0){
         *size = 0;
         return false;
       }
@@ -314,14 +314,16 @@ namespace ramrod {
     bool server::close_child(){
       if(!is_tcp_){
         connected_fd_ = -1;
-        return !(connected_ = false);
+        connected_.store(false);
+        return true;
       }
 
       if(connected_fd_ < 0){
 #ifdef VERBOSE
         rr::warning("Children connection already closed.");
 #endif
-        return !(connected_ = false);
+        connected_.store(false);
+        return true;
       }
 
       if(::shutdown(connected_fd_, SHUT_RDWR) == -1)
@@ -329,19 +331,21 @@ namespace ramrod {
 
       if(::close(connected_fd_) == -1){
         rr::perror("Children connection cannot be closed");
-        return !(connected_ = false);
+        connected_.store(false);
+        return true;
       }
 
       connected_fd_ = -1;
-      return !(connected_ = false);
+      connected_.store(false);
+      return true;
     }
 
     void server::concurrent_connector(const bool force, const bool wait){
-      if(!force && terminate_concurrent_){
-        terminate_concurrent_ = false;
+      if(!force && terminate_concurrent_.load()){
+        terminate_concurrent_.store(false);
         return;
       }
-      if(connected_) return;
+      if(connected_.load()) return;
 
       int status;
       struct addrinfo hints;
@@ -402,7 +406,7 @@ namespace ramrod {
         std::this_thread::sleep_for(reconnection_time_);
 
         // Terminates the pending connection in case disconnect() is called:
-        if(terminate_concurrent_) return;
+        if(terminate_concurrent_.load()) return;
 
         rr::attention("Reconnecting!");
 
@@ -443,9 +447,9 @@ namespace ramrod {
 #endif
         }
 
-        terminate_receive_ = false;
-        terminate_send_ = false;
-        connecting_ = false;
+        terminate_receive_.store(false);
+        terminate_send_.store(false);
+        connecting_.store(false);
 
         if(::strcmp(incoming, "identifier") != 0){
 #ifdef VERBOSE
@@ -456,7 +460,7 @@ namespace ramrod {
         std::memcpy(client_->ai_addr, &receiver, addrlen);
         client_->ai_addrlen = addrlen;
         connected_fd_ = socket_fd_;
-        connected_ = true;
+        connected_.store(true);
 #ifdef VERBOSE
         rr::attention("Connection established!");
 #endif
@@ -476,7 +480,7 @@ namespace ramrod {
       struct sockaddr_storage their_addr;
       socklen_t addr_size;
 
-      while(!terminate_concurrent_){
+      while(!terminate_concurrent_.load()){
         addr_size = sizeof(their_addr);
         // Accept incoming connection
         if((connected_fd_ = ::accept(socket_fd_, (struct sockaddr*)&their_addr, &addr_size)) == -1){
@@ -486,10 +490,10 @@ namespace ramrod {
 #ifdef VERBOSE
         rr::attention("Connection established!");
 #endif
-        connected_ = true;
-        connecting_ = false;
-        terminate_receive_ = false;
-        terminate_send_ = false;
+        connected_.store(true);
+        connecting_.store(false);
+        terminate_receive_.store(false);
+        terminate_send_.store(false);
 
         break;
       }
@@ -518,7 +522,7 @@ namespace ramrod {
       bool never{false};
       if(breaker == nullptr) breaker = &never;
 
-      while(total_received < *size && !terminate_send_ && !(*breaker)){
+      while(total_received < *size && !terminate_send_.load() && !(*breaker)){
         if(is_tcp_)
           received_size = ::recv(connected_fd_, (std::uint8_t*)buffer + total_received,
                                  bytes_left, flags);
@@ -571,7 +575,7 @@ namespace ramrod {
       bool never{false};
       if(breaker == nullptr) breaker = &never;
 
-      while(total_sent < *size && !terminate_send_ && !(*breaker)){
+      while(total_sent < *size && !terminate_send_.load() && !(*breaker)){
         sent_size = ::sendto(connected_fd_, (std::uint8_t*)buffer + total_sent,
                              bytes_left, flags, client_->ai_addr, client_->ai_addrlen);
         // The client has disconnected and therefore disconnecting server
