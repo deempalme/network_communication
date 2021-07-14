@@ -530,7 +530,7 @@ namespace ramrod {
 #endif
           // There is an error and returns after the max intents have been reached
           if(++error_counter > max_intents_){
-            *size = -1;
+            *size = std::size_t(-1);
             return;
           }
 
@@ -576,7 +576,7 @@ namespace ramrod {
 #endif
           // There is an error and returns after the max intents have been reached
           if(++error_counter > max_intents_){
-            *size = -1;
+            *size = std::size_t(-1);
             return;
           }
 
