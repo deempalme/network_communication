@@ -1,25 +1,23 @@
-#ifndef RAMROD_NETWORK_COMMUNICATION_SERVER_H
-#define RAMROD_NETWORK_COMMUNICATION_SERVER_H
+#ifndef RAMROD_NETWORK_COMMUNICATION_CLIENT_H
+#define RAMROD_NETWORK_COMMUNICATION_CLIENT_H
 
 #include <atomic>        // for atomic
-#include <chrono>        // for duration
 #include <cstdint>       // for uint32_t, uint16_t
+#include <sys/types.h>   // for ssize_t
+#include <sys/socket.h>  // for recv, send, MSG_NOSIGNAL, accept
+#include <chrono>        // for duration
 #include <ratio>         // for milli
 #include <string>        // for string
-#include <sys/socket.h>  // for recv, send, MSG_NOSIGNAL, accept
-#include <sys/types.h>   // for ssize_t
 
 #include "ramrod/network_communication/conversor.h"
 
-struct addrinfo;
-
 namespace ramrod {
   namespace network_communication {
-    class server : public conversor
+    class client : public conversor
     {
     public:
-      server();
-      ~server();
+      client();
+      ~client();
       /**
        * @brief Makes a TCP socket stream connection to an specific IP and port
        *
@@ -115,10 +113,10 @@ namespace ramrod {
        *                       or if some error occurs or if the remote side closes the
        *                       connection, etc. Don’t be mad with it.
        *
-       * @return The number of bytes actually received, or 0 when the server is disconnected or
-       *         size=0, or -1 on error (and `errno` will be set accordingly).
+       * @return The number of bytes actually received, or 0 when the server is disconnected,
+       *         or -1 on error (and `errno` will be set accordingly).
        */
-      ssize_t receive(void *buffer, const std::size_t size, const int flags = 0);
+      ssize_t receive(char *buffer, const ssize_t size, const int flags = 0);
       /**
        * @brief Receives all required sized data from a TCP socket stream
        *
@@ -146,10 +144,10 @@ namespace ramrod {
        *                       or if some error occurs or if the remote side closes the
        *                       connection, etc. Don’t be mad with it.
        *
-       * @return The number of bytes actually received, or 0 when the server is disconnected or
-       *         size=0, or -1 on error (and `errno` will be set accordingly).
+       * @return The number of bytes actually received, or 0 when the server is disconnected,
+       *         or -1 on error (and `errno` will be set accordingly).
        */
-      ssize_t receive_all(void *buffer, const std::size_t size, bool *breaker = nullptr,
+      ssize_t receive_all(char *buffer, const ssize_t size, bool *breaker = nullptr,
                           const int flags = 0);
       /**
        * @brief Receives all required sized data from a TCP socket stream in a different thread
@@ -181,16 +179,16 @@ namespace ramrod {
        *                       or if some error occurs or if the remote side closes the
        *                       connection, etc. Don’t be mad with it.
        *
-       * @return `false` if there is no open connection, or if size=0
+       * @return `false` if there is no open connection.
        */
-      bool receive_all_concurrently(void *buffer, std::size_t *size, bool *breaker = nullptr,
+      bool receive_all_concurrently(char *buffer, ssize_t *size, bool *breaker = nullptr,
                                     const int flags = 0);
       /**
-       * @brief Receives all required sized data from a TCP socket stream
+       * @brief Receives data from a TCP socket stream in a different thread
        *
        * @param buffer Is a pointer to the data you want to receive
        * @param size   Is a pointer to the number of bytes you want to receive, when the task is
-       *               finished it will return the total number of bytes actually received, or 0
+       *               finished it will return the total number of bytes actually received, or 0 
        *               when the server is disconnected, or -1 on error (and `errno` will be set
        *               accordingly).
        * @param flags  Allows you to specify more information about how the data is to be received.
@@ -210,9 +208,9 @@ namespace ramrod {
        *                       or if some error occurs or if the remote side closes the
        *                       connection, etc. Don’t be mad with it.
        *
-       * @return `false` if there is no open connection, or if size=0
+       * @return `false` if there is no open connection.
        */
-      bool receive_concurrently(void *buffer, std::size_t *size, const int flags = 0);
+      bool receive_concurrently(char *buffer, ssize_t *size, const int flags = 0);
       /**
        * @brief Reconnecting again
        *
@@ -247,11 +245,10 @@ namespace ramrod {
        *                        `receive()`ing, you’ll typically get the signal `SIGPIPE`.
        *                        Adding this flag prevents that signal from being raised.
        *
-       * @return The number of bytes actually received, or 0 when the server is disconnected
-       *         or if size=0, or if is UDP and you have not yet received a packet to obtain
-       *         client address information, or -1 on error (and `errno` will be set accordingly).
+       * @return The number of bytes actually received, or 0 when the server is disconnected,
+       *         or -1 on error (and `errno` will be set accordingly).
        */
-      ssize_t send(void *buffer, const std::size_t size, const int flags = MSG_NOSIGNAL);
+      ssize_t send(const char *buffer, const ssize_t size, const int flags = MSG_NOSIGNAL);
       /**
        * @brief Sends all required sized data to a TCP socket stream
        *
@@ -276,11 +273,10 @@ namespace ramrod {
        *                        `receive()`ing, you’ll typically get the signal `SIGPIPE`.
        *                        Adding this flag prevents that signal from being raised.
        *
-       * @return The number of bytes actually received, or 0 when the server is disconnected
-       *         or if size=0, or if is UDP and you have not yet received a packet to obtain
-       *         client address information, or -1 on error (and `errno` will be set accordingly).
+       * @return The number of bytes actually received, or 0 when the server is disconnected,
+       *         or -1 on error (and `errno` will be set accordingly).
        */
-      ssize_t send_all(void *buffer, const std::size_t size, bool *breaker = nullptr,
+      ssize_t send_all(const char *buffer, const ssize_t size, bool *breaker = nullptr,
                        const int flags = MSG_NOSIGNAL);
       /**
        * @brief Sends all required sized data to a TCP socket stream in a different thread
@@ -309,17 +305,16 @@ namespace ramrod {
        *                        `receive()`ing, you’ll typically get the signal `SIGPIPE`.
        *                        Adding this flag prevents that signal from being raised.
        *
-       * @return `false` if there is no open connection, or if size=0, or if is UDP and
-       *         you have not yet received a packet to obtain client address information.
+       * @return `false` if there is no open connection.
        */
-      bool send_all_concurrently(const void *buffer, std::size_t *size, bool *breaker = nullptr,
+      bool send_all_concurrently(const char *buffer, ssize_t *size, bool *breaker = nullptr,
                                  const int flags = MSG_NOSIGNAL);
       /**
        * @brief Sends data to a TCP socket stream in a different thread
        *
        * @param buffer Is a pointer to the data you want to send
        * @param size   Is a pointer to the number of bytes you want to send, when the task is
-       *               finished it will return the total number of bytes actually sent, or 0
+       *               finished it will return the total number of bytes actually sent, or 0 
        *               when the server is disconnected, or -1 on error (and `errno` will be set
        *               accordingly).
        * @param flags  Allows you to specify more information about how the data is to be sent.
@@ -336,10 +331,9 @@ namespace ramrod {
        *                        `receive()`ing, you’ll typically get the signal `SIGPIPE`.
        *                        Adding this flag prevents that signal from being raised.
        *
-       * @return `false` if there is no open connection, or size is 0, or if is UDP and
-       *         you have not yet received a packet to obtain client address information.
+       * @return `false` if there is no open connection.
        */
-      bool send_concurrently(const void *buffer, std::size_t *size, const int flags = MSG_NOSIGNAL);
+      bool send_concurrently(const char *buffer, ssize_t *size, const int flags = MSG_NOSIGNAL);
       /**
        * @brief Gettting the current time that this device will wait to try to connect
        *        again if the previous intent to establish a connection failed
@@ -357,20 +351,17 @@ namespace ramrod {
 
     private:
       bool close();
-      bool close_child();
 
       void concurrent_connector(const bool force = true, const bool wait = false);
-      void concurrent_connection();
 
-      void concurrent_receive(void *buffer, std::size_t *size, const int flags);
-      void concurrent_receive_all(void *buffer, std::size_t *size, bool *breaker, const int flags);
-      void concurrent_send(const void *buffer, std::size_t *size, const int flags);
-      void concurrent_send_all(const void *buffer, std::size_t *size, bool *breaker, const int flags);
+      void concurrent_receive(char *buffer, ssize_t *size, const int flags);
+      void concurrent_receive_all(char *buffer, ssize_t *size, bool *breaker, const int flags);
+      void concurrent_send(const char *buffer, ssize_t *size, const int flags);
+      void concurrent_send_all(const char *buffer, ssize_t *size, bool *breaker, const int flags);
 
       std::string ip_;
       int port_;
       int socket_fd_;
-      int connected_fd_;
       int max_queue_;
       std::uint32_t current_intent_;
       std::uint32_t max_intents_;
@@ -380,8 +371,6 @@ namespace ramrod {
       std::atomic<bool> connected_;
       std::atomic<bool> connecting_;
       bool is_tcp_;
-      addrinfo *client_;
-      addrinfo *results_;
       std::chrono::duration<long, std::milli> reconnection_time_;
     };
 
@@ -390,4 +379,4 @@ namespace ramrod {
   } // namespace: network_communication
 } // namespace: ramrod
 
-#endif // RAMROD_NETWORK_COMMUNICATION_SERVER_H
+#endif // RAMROD_NETWORK_COMMUNICATION_CLIENT_H
