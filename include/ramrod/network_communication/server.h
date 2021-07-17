@@ -159,7 +159,7 @@ namespace ramrod {
        * @param buffer  Is a pointer to the data you want to receive
        * @param size    Is a pointer to the number of bytes you want to receive, when the task is
        *                finished it will return the total number of bytes actually received, or 0
-       *                when the server is disconnected, or -1 on error (and `errno` will be set
+       *                when the server is disconnected, or on error (and `errno` will be set
        *                accordingly).
        * @param breaker Is a pointer to a boolean variable that will break the infinite loop
        *                when is set to `true`, if left as `nullptr` then it will keep waiting for
@@ -191,7 +191,7 @@ namespace ramrod {
        * @param buffer Is a pointer to the data you want to receive
        * @param size   Is a pointer to the number of bytes you want to receive, when the task is
        *               finished it will return the total number of bytes actually received, or 0
-       *               when the server is disconnected, or -1 on error (and `errno` will be set
+       *               when the server is disconnected, or on error (and `errno` will be set
        *               accordingly).
        * @param flags  Allows you to specify more information about how the data is to be received.
        *          MSG_OOB      Receive as “out of band” data. This is how to get data that has
@@ -290,7 +290,7 @@ namespace ramrod {
        * @param buffer Is a pointer to the data you want to send
        * @param size   Is a pointer to the number of bytes you want to send, when the task is
        *               finished it will return the total number of bytes actually sent, or 0
-       *               when the server is disconnected, or -1 on error (and `errno` will be set
+       *               when the server is disconnected, or on error (and `errno` will be set
        *               accordingly).
        * @param breaker Is a pointer to a boolean variable that will break the infinite loop
        *                when is set to `true`, if left as `nullptr` then it will keep waiting for
@@ -320,7 +320,7 @@ namespace ramrod {
        * @param buffer Is a pointer to the data you want to send
        * @param size   Is a pointer to the number of bytes you want to send, when the task is
        *               finished it will return the total number of bytes actually sent, or 0
-       *               when the server is disconnected, or -1 on error (and `errno` will be set
+       *               when the server is disconnected, or on error (and `errno` will be set
        *               accordingly).
        * @param flags  Allows you to specify more information about how the data is to be sent.
        *          MSG_OOB       Send as “out of band” data. TCP supports this, and it’s a way to
@@ -382,6 +382,7 @@ namespace ramrod {
       bool is_tcp_;
       addrinfo *client_;
       addrinfo *results_;
+      struct sockaddr incoming_;
       std::chrono::duration<long, std::milli> reconnection_time_;
     };
 
