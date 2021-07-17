@@ -116,7 +116,7 @@ namespace ramrod {
        * @return The number of bytes actually received, or 0 when the server is disconnected,
        *         or -1 on error (and `errno` will be set accordingly).
        */
-      ssize_t receive(char *buffer, const ssize_t size, const int flags = 0);
+      ssize_t receive(char *buffer, const std::size_t size, const int flags = 0);
       /**
        * @brief Receives all required sized data from a TCP socket stream
        *
@@ -147,7 +147,7 @@ namespace ramrod {
        * @return The number of bytes actually received, or 0 when the server is disconnected,
        *         or -1 on error (and `errno` will be set accordingly).
        */
-      ssize_t receive_all(char *buffer, const ssize_t size, bool *breaker = nullptr,
+      ssize_t receive_all(char *buffer, const std::size_t size, bool *breaker = nullptr,
                           const int flags = 0);
       /**
        * @brief Receives all required sized data from a TCP socket stream in a different thread
@@ -181,7 +181,7 @@ namespace ramrod {
        *
        * @return `false` if there is no open connection.
        */
-      bool receive_all_concurrently(char *buffer, ssize_t *size, bool *breaker = nullptr,
+      bool receive_all_concurrently(char *buffer, std::size_t *size, bool *breaker = nullptr,
                                     const int flags = 0);
       /**
        * @brief Receives data from a TCP socket stream in a different thread
@@ -210,7 +210,7 @@ namespace ramrod {
        *
        * @return `false` if there is no open connection.
        */
-      bool receive_concurrently(char *buffer, ssize_t *size, const int flags = 0);
+      bool receive_concurrently(char *buffer, std::size_t *size, const int flags = 0);
       /**
        * @brief Reconnecting again
        *
@@ -248,7 +248,7 @@ namespace ramrod {
        * @return The number of bytes actually received, or 0 when the server is disconnected,
        *         or -1 on error (and `errno` will be set accordingly).
        */
-      ssize_t send(const char *buffer, const ssize_t size, const int flags = MSG_NOSIGNAL);
+      ssize_t send(const char *buffer, const std::size_t size, const int flags = MSG_NOSIGNAL);
       /**
        * @brief Sends all required sized data to a TCP socket stream
        *
@@ -276,7 +276,7 @@ namespace ramrod {
        * @return The number of bytes actually received, or 0 when the server is disconnected,
        *         or -1 on error (and `errno` will be set accordingly).
        */
-      ssize_t send_all(const char *buffer, const ssize_t size, bool *breaker = nullptr,
+      ssize_t send_all(const char *buffer, const std::size_t size, bool *breaker = nullptr,
                        const int flags = MSG_NOSIGNAL);
       /**
        * @brief Sends all required sized data to a TCP socket stream in a different thread
@@ -307,7 +307,7 @@ namespace ramrod {
        *
        * @return `false` if there is no open connection.
        */
-      bool send_all_concurrently(const char *buffer, ssize_t *size, bool *breaker = nullptr,
+      bool send_all_concurrently(const char *buffer, std::size_t *size, bool *breaker = nullptr,
                                  const int flags = MSG_NOSIGNAL);
       /**
        * @brief Sends data to a TCP socket stream in a different thread
@@ -333,7 +333,7 @@ namespace ramrod {
        *
        * @return `false` if there is no open connection.
        */
-      bool send_concurrently(const char *buffer, ssize_t *size, const int flags = MSG_NOSIGNAL);
+      bool send_concurrently(const char *buffer, std::size_t *size, const int flags = MSG_NOSIGNAL);
       /**
        * @brief Gettting the current time that this device will wait to try to connect
        *        again if the previous intent to establish a connection failed
@@ -354,10 +354,10 @@ namespace ramrod {
 
       void concurrent_connector(const bool force = true, const bool wait = false);
 
-      void concurrent_receive(char *buffer, ssize_t *size, const int flags);
-      void concurrent_receive_all(char *buffer, ssize_t *size, bool *breaker, const int flags);
-      void concurrent_send(const char *buffer, ssize_t *size, const int flags);
-      void concurrent_send_all(const char *buffer, ssize_t *size, bool *breaker, const int flags);
+      void concurrent_receive(char *buffer, std::size_t *size, const int flags);
+      void concurrent_receive_all(char *buffer, std::size_t *size, bool *breaker, const int flags);
+      void concurrent_send(const char *buffer, std::size_t *size, const int flags);
+      void concurrent_send_all(const char *buffer, std::size_t *size, bool *breaker, const int flags);
 
       std::string ip_;
       int port_;

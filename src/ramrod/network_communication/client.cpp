@@ -98,36 +98,37 @@ namespace ramrod {
       return port_;
     }
 
-    ssize_t client::receive(char *buffer, const ssize_t size, const int flags){
+    ssize_t client::receive(void *buffer, const std::size_t size, const int flags){
       if(!connected_.load() || size == 0)
         return 0;
 
-      ssize_t received{::recv(socket_fd_, buffer, static_cast<std::size_t>(size), flags)};
+      ssize_t received{::recv(socket_fd_, buffer, size, flags)};
 #ifdef VERBOSE
       if(received <= 0) rr::perror("Receiving data");
 #endif
       return received;
     }
 
-    ssize_t client::receive_all(char *buffer, const ssize_t size, bool *breaker,
+    ssize_t client::receive_all(void *buffer, const std::size_t size, bool *breaker,
                                 const int flags){
       if(!connected_.load() || size == 0)
         return 0;
 
-      ssize_t total_received{0};
-      ssize_t bytes_left = size;
+      std::size_t total_received{0};
+      std::size_t bytes_left = size;
       ssize_t received_size;
       std::uint32_t error_counter{0};
       bool never{false};
       if(breaker == nullptr) breaker = &never;
 
       while(total_received < size && !(*breaker)){
-        if((received_size = ::recv(socket_fd_, buffer + total_received,
-                                   static_cast<std::size_t>(bytes_left), flags)) <= 0){
-          // The server has disconnected and therefore disconnecting client
-          if(received_size == 0)
-            return 0;
+        received_size = ::recv(socket_fd_, (std::uint8_t*)buffer + total_received,
+                               bytes_left, flags);
+        // The server has disconnected and therefore disconnecting client
+        if(received_size == 0)
+          return 0;
 
+        if(received_size < 0){
 #ifdef VERBOSE
           rr::perror("Receiving data");
 #endif
@@ -139,13 +140,13 @@ namespace ramrod {
           std::this_thread::sleep_for(std::chrono::milliseconds(5));
           continue;
         }
-        total_received += received_size;
-        bytes_left -= received_size;
+        total_received += static_cast<std::size_t>(received_size);
+        bytes_left -= static_cast<std::size_t>(received_size);
       }
-      return total_received;
+      return static_cast<ssize_t>(total_received);
     }
 
-    bool client::receive_all_concurrently(char *buffer, ssize_t *size, bool *breaker,
+    bool client::receive_all_concurrently(void *buffer, std::size_t *size, bool *breaker,
                                           const int flags){
       if(!connected_.load() || *size == 0){
         *size = 0;
@@ -156,7 +157,7 @@ namespace ramrod {
       return true;
     }
 
-    bool client::receive_concurrently(char *buffer, ssize_t *size, const int flags){
+    bool client::receive_concurrently(void *buffer, std::size_t *size, const int flags){
       if(!connected_.load() || *size == 0){
         *size = 0;
         return false;
@@ -181,36 +182,37 @@ namespace ramrod {
       return true;
     }
 
-    ssize_t client::send(const char *buffer, const ssize_t size, const int flags){
+    ssize_t client::send(const void *buffer, const std::size_t size, const int flags){
       if(!connected_.load() || size == 0)
         return 0;
 
-      ssize_t sent{::send(socket_fd_, buffer, static_cast<std::size_t>(size), flags)};
+      ssize_t sent{::send(socket_fd_, buffer, size, flags)};
 #ifdef VERBOSE
       if(sent <= 0) rr::perror("Sending data");
 #endif
       return sent;
     }
 
-    ssize_t client::send_all(const char *buffer, const ssize_t size, bool *breaker,
+    ssize_t client::send_all(const void *buffer, const std::size_t size, bool *breaker,
                              const int flags){
       if(!connected_.load() || size == 0)
         return 0;
 
-      ssize_t total_sent{0};
-      ssize_t bytes_left = size;
+      std::size_t total_sent{0};
+      std::size_t bytes_left = size;
       ssize_t sent_size;
       std::uint32_t error_counter{0};
       bool never{false};
       if(breaker == nullptr) breaker = &never;
 
       while(total_sent < size && !(*breaker)){
-        if((sent_size = ::send(socket_fd_, buffer + total_sent,
-                               static_cast<std::size_t>(bytes_left), flags)) <= 0){
-          // The server has disconnected and therefore disconnecting client
-          if(sent_size == 0)
-            return 0;
+        sent_size = ::send(socket_fd_, (std::uint8_t*)buffer + total_sent,
+                           bytes_left, flags);
+        // The server has disconnected and therefore disconnecting client
+        if(sent_size == 0)
+          return 0;
 
+        if(sent_size < 0){
 #ifdef VERBOSE
           rr::perror("Sending data");
 #endif
@@ -222,13 +224,13 @@ namespace ramrod {
           std::this_thread::sleep_for(std::chrono::milliseconds(5));
           continue;
         }
-        total_sent += sent_size;
-        bytes_left -= sent_size;
+        total_sent += static_cast<std::size_t>(sent_size);
+        bytes_left -= static_cast<std::size_t>(sent_size);
       }
-      return total_sent;
+      return static_cast<ssize_t>(total_sent);
     }
 
-    bool client::send_all_concurrently(const char *buffer, ssize_t *size, bool *breaker,
+    bool client::send_all_concurrently(const void *buffer, std::size_t *size, bool *breaker,
                                        const int flags){
       if(!connected_.load() || *size == 0){
         *size = 0;
@@ -239,7 +241,7 @@ namespace ramrod {
       return true;
     }
 
-    bool client::send_concurrently(const char *buffer, ssize_t *size, const int flags){
+    bool client::send_concurrently(const void *buffer, std::size_t *size, const int flags){
       if(!connected_.load() || *size == 0){
         *size = 0;
         return false;
@@ -380,31 +382,33 @@ namespace ramrod {
 #endif
     }
 
-    void client::concurrent_receive(char *buffer, ssize_t *size, const int flags){
-      ssize_t received{::recv(socket_fd_, buffer, static_cast<std::size_t>(*size), flags)};
+    void client::concurrent_receive(void *buffer, std::size_t *size, const int flags){
+      ssize_t received{::recv(socket_fd_, buffer, *size, flags)};
 #ifdef VERBOSE
       if(received <= 0) rr::perror("Receiving data");
 #endif
-      *size = received;
+      *size = static_cast<std::size_t>(received);
     }
 
-    void client::concurrent_receive_all(char *buffer, ssize_t *size, bool *breaker,
+    void client::concurrent_receive_all(void *buffer, std::size_t *size, bool *breaker,
                                         const int flags){
-      ssize_t total_received{0};
-      ssize_t bytes_left = *size;
+      std::size_t total_received{0};
+      std::size_t bytes_left = *size;
       ssize_t received_size;
       std::uint32_t error_counter{0};
       bool never{false};
       if(breaker == nullptr) breaker = &never;
 
       while(total_received < *size && !terminate_receive_.load() && !(*breaker)){
-        if((received_size = ::recv(socket_fd_, buffer + total_received,
-                                   static_cast<std::size_t>(bytes_left), flags)) <= 0){
-          // The server has disconnected and therefore disconnecting client
-          if(received_size == 0){
-            *size = 0;
-            return;
-          }
+        received_size = ::recv(socket_fd_, (std::uint8_t*)buffer + total_received,
+                               bytes_left, flags);
+        // The server has disconnected and therefore disconnecting client
+        if(received_size == 0){
+          *size = 0;
+          return;
+        }
+
+        if(received_size < 0){
 #ifdef VERBOSE
           rr::perror("Receiving data");
 #endif
@@ -418,36 +422,38 @@ namespace ramrod {
           std::this_thread::sleep_for(std::chrono::milliseconds(5));
           continue;
         }
-        total_received += received_size;
-        bytes_left -= received_size;
+        total_received += static_cast<std::size_t>(received_size);
+        bytes_left -= static_cast<std::size_t>(received_size);
       }
       *size = total_received;
     }
 
-    void client::concurrent_send(const char *buffer, ssize_t *size, const int flags){
-      ssize_t sent{::send(socket_fd_, buffer, static_cast<std::size_t>(*size), flags)};
+    void client::concurrent_send(const void *buffer, std::size_t *size, const int flags){
+      ssize_t sent{::send(socket_fd_, buffer, *size, flags)};
 #ifdef VERBOSE
       if(sent <= 0) rr::perror("Sending data");
 #endif
       *size = sent;
     }
 
-    void client::concurrent_send_all(const char *buffer, ssize_t *size, bool *breaker,
+    void client::concurrent_send_all(const void *buffer, std::size_t *size, bool *breaker,
                                      const int flags){
-      ssize_t total_sent{0};
-      ssize_t bytes_left = *size;
+      std::size_t total_sent{0};
+      std::size_t bytes_left = *size;
       ssize_t sent_size;
       std::uint32_t error_counter{0};
       bool never{false};
       if(breaker == nullptr) breaker = &never;
 
       while(total_sent < *size && !terminate_send_.load() && !(*breaker)){
-        if((sent_size = ::send(socket_fd_, buffer + total_sent,
-                               static_cast<std::size_t>(bytes_left), flags)) <= 0){
-          if(sent_size == 0){
-            *size = 0;
-            return;
-          }
+        sent_size = ::send(socket_fd_, (std::uint8_t*)buffer + total_sent,
+                           bytes_left, flags);
+        if(sent_size == 0){
+          *size = 0;
+          return;
+        }
+
+        if(sent_size < 0){
 #ifdef VERBOSE
           rr::perror("Sending data");
 #endif
@@ -461,8 +467,8 @@ namespace ramrod {
           std::this_thread::sleep_for(std::chrono::milliseconds(5));
           continue;
         }
-        total_sent += sent_size;
-        bytes_left -= sent_size;
+        total_sent += static_cast<std::size_t>(sent_size);
+        bytes_left -= static_cast<std::size_t>(sent_size);
       }
       *size = total_sent;
     }

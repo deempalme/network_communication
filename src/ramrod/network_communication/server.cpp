@@ -512,7 +512,7 @@ namespace ramrod {
       bool never{false};
       if(breaker == nullptr) breaker = &never;
 
-      while(total_received < *size && !terminate_send_.load() && !(*breaker)){
+      while(total_received < *size && !terminate_receive_.load() && !(*breaker)){
         if(is_tcp_)
           received_size = ::recv(connected_fd_, (std::uint8_t*)buffer + total_received,
                                  bytes_left, flags);
