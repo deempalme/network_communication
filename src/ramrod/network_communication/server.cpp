@@ -222,7 +222,7 @@ namespace ramrod {
       return true;
     }
 
-    ssize_t server::send(void *buffer, const std::size_t size, const int flags){
+    ssize_t server::send(const void *buffer, const std::size_t size, const int flags){
       if(!connected_.load() || size == 0)
         return 0;
 
@@ -250,7 +250,7 @@ namespace ramrod {
       }
     }
 
-    ssize_t server::send_all(void *buffer, const std::size_t size, bool *breaker,
+    ssize_t server::send_all(const void *buffer, const std::size_t size, bool *breaker,
                              const int flags){
       if(!connected_.load() || size == 0)
         return 0;
@@ -263,7 +263,7 @@ namespace ramrod {
       if(breaker == nullptr) breaker = &never;
 
       while(total_sent < size && !(*breaker)){
-        sent_size = ::sendto(connected_fd_, (std::uint8_t*)buffer + total_sent,
+        sent_size = ::sendto(connected_fd_, (const std::uint8_t*)buffer + total_sent,
                              bytes_left, flags, client_->ai_addr, client_->ai_addrlen);
         if(sent_size == 0)
           return 0;
@@ -650,7 +650,7 @@ namespace ramrod {
       if(breaker == nullptr) breaker = &never;
 
       while(total_sent < *size && !terminate_send_.load() && !(*breaker)){
-        sent_size = ::sendto(connected_fd_, (std::uint8_t*)buffer + total_sent,
+        sent_size = ::sendto(connected_fd_, (const std::uint8_t*)buffer + total_sent,
                              bytes_left, flags, client_->ai_addr, client_->ai_addrlen);
         if(sent_size == 0){
           *size = 0;

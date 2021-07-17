@@ -251,7 +251,7 @@ namespace ramrod {
        *         or if size=0, or if is UDP and you have not yet received a packet to obtain
        *         client address information, or -1 on error (and `errno` will be set accordingly).
        */
-      ssize_t send(void *buffer, const std::size_t size, const int flags = MSG_NOSIGNAL);
+      ssize_t send(const void *buffer, const std::size_t size, const int flags = MSG_NOSIGNAL);
       /**
        * @brief Sends all required sized data to a TCP socket stream
        *
@@ -280,7 +280,7 @@ namespace ramrod {
        *         or if size=0, or if is UDP and you have not yet received a packet to obtain
        *         client address information, or -1 on error (and `errno` will be set accordingly).
        */
-      ssize_t send_all(void *buffer, const std::size_t size, bool *breaker = nullptr,
+      ssize_t send_all(const void *buffer, const std::size_t size, bool *breaker = nullptr,
                        const int flags = MSG_NOSIGNAL);
       /**
        * @brief Sends all required sized data to a TCP socket stream in a different thread

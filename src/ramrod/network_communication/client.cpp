@@ -237,7 +237,7 @@ namespace ramrod {
       if(breaker == nullptr) breaker = &never;
 
       while(total_sent < size && !(*breaker)){
-        sent_size = ::send(socket_fd_, (std::uint8_t*)buffer + total_sent,
+        sent_size = ::send(socket_fd_, (const std::uint8_t*)buffer + total_sent,
                            bytes_left, flags);
         // The server has disconnected and therefore disconnecting client
         if(sent_size == 0)
@@ -518,7 +518,7 @@ namespace ramrod {
       if(breaker == nullptr) breaker = &never;
 
       while(total_sent < *size && !terminate_send_.load() && !(*breaker)){
-        sent_size = ::send(socket_fd_, (std::uint8_t*)buffer + total_sent,
+        sent_size = ::send(socket_fd_, (const std::uint8_t*)buffer + total_sent,
                            bytes_left, flags);
         if(sent_size == 0){
           *size = 0;
