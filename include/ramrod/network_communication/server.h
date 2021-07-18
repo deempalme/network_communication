@@ -359,7 +359,7 @@ namespace ramrod {
       bool close();
       bool close_child();
 
-      void concurrent_connector(const bool force = true, const bool wait = false);
+      void concurrent_connector(const bool wait = false);
       void concurrent_connection();
 
       void concurrent_receive(void *buffer, std::size_t *size, const int flags);
