@@ -51,20 +51,19 @@ namespace ramrod {
 
       ip_ = ip;
       port_ = port;
-      connecting_.store(true);
       current_intent_ = 0;
       is_tcp_ = socket_type != SOCK_DGRAM;
-
       terminate_concurrent_.store(false);
 
       if(concurrent)
-        std::thread(&server::concurrent_connector, this, true, false).detach();
+        std::thread(&server::concurrent_connector, this, false).detach();
       else
-        concurrent_connector(true, true);
+        concurrent_connector(true);
       return true;
     }
 
     bool server::disconnect(){
+      connecting_.store(false);
       terminate_send_.store(true);
       terminate_receive_.store(true);
       terminate_concurrent_.store(true);
@@ -211,14 +210,14 @@ namespace ramrod {
       if(connecting_.load()) return true;
       if(connected_.load()) disconnect();
 
-      connecting_.store(true);
       current_intent_ = 0;
-      terminate_concurrent_.store(true);
+      connecting_.store(true);
+      terminate_concurrent_.store(false);
 
       if(concurrent)
-        std::thread(&server::concurrent_connector, this, true, false).detach();
+        std::thread(&server::concurrent_connector, this, false).detach();
       else
-        concurrent_connector(true, true);
+        concurrent_connector(true);
       return true;
     }
 
@@ -331,10 +330,8 @@ namespace ramrod {
       if(::shutdown(socket_fd_, SHUT_RDWR) == -1)
         rr::perror("Connection cannot be shutdown");
 
-      if(::close(socket_fd_) == -1){
+      if(::close(socket_fd_) == -1)
         rr::perror("Connection cannot be closed");
-        return false;
-      }
 
       socket_fd_ = -1;
       return true;
@@ -358,24 +355,18 @@ namespace ramrod {
       if(::shutdown(connected_fd_, SHUT_RDWR) == -1)
         rr::perror("Children connection cannot be shutdown");
 
-      if(::close(connected_fd_) == -1){
+      if(::close(connected_fd_) == -1)
         rr::perror("Children connection cannot be closed");
-        connected_.store(false);
-        return true;
-      }
 
       connected_fd_ = -1;
       connected_.store(false);
       return true;
     }
 
-    void server::concurrent_connector(const bool force, const bool wait){
-      if(!force && terminate_concurrent_.load()){
-        terminate_concurrent_.store(false);
-        return;
-      }
+    void server::concurrent_connector(const bool wait){
       if(connected_.load()) return;
 
+      connecting_.store(true);
       int status;
       struct addrinfo hints;
 
@@ -435,14 +426,17 @@ namespace ramrod {
         std::this_thread::sleep_for(reconnection_time_);
 
         // Terminates the pending connection in case disconnect() is called:
-        if(terminate_concurrent_.load()) return;
+        if(terminate_concurrent_.load()){
+          connecting_.store(false);
+          return;
+        }
 
         rr::attention("Reconnecting!");
 
         if(wait)
-          concurrent_connector(false, true);
+          concurrent_connector(true);
         else
-          std::thread(&server::concurrent_connector, this, false, false).detach();
+          std::thread(&server::concurrent_connector, this, false).detach();
 
         return;
       }
@@ -495,6 +489,7 @@ namespace ramrod {
 #endif
         return;
       }
+
       // In case is TCP then we must accept an incomming connection
       if(wait)
         concurrent_connection();
@@ -521,8 +516,9 @@ namespace ramrod {
 #endif
         connected_.store(true);
         connecting_.store(false);
-        terminate_receive_.store(false);
         terminate_send_.store(false);
+        terminate_receive_.store(false);
+        terminate_concurrent_.store(true);
 
         break;
       }
