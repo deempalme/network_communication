@@ -116,7 +116,7 @@ namespace ramrod {
        * @return The number of bytes actually received, or 0 when the server is disconnected,
        *         or -1 on error (and `errno` will be set accordingly).
        */
-      ssize_t receive(char *buffer, const ssize_t size, const int flags = 0);
+      ssize_t receive(void *buffer, const std::size_t size, const int flags = 0);
       /**
        * @brief Receives all required sized data from a TCP socket stream
        *
@@ -147,7 +147,7 @@ namespace ramrod {
        * @return The number of bytes actually received, or 0 when the server is disconnected,
        *         or -1 on error (and `errno` will be set accordingly).
        */
-      ssize_t receive_all(char *buffer, const ssize_t size, bool *breaker = nullptr,
+      ssize_t receive_all(void *buffer, const std::size_t size, bool *breaker = nullptr,
                           const int flags = 0);
       /**
        * @brief Receives all required sized data from a TCP socket stream in a different thread
@@ -157,7 +157,7 @@ namespace ramrod {
        * @param buffer  Is a pointer to the data you want to receive
        * @param size    Is a pointer to the number of bytes you want to receive, when the task is
        *                finished it will return the total number of bytes actually received, or 0
-       *                when the server is disconnected, or -1 on error (and `errno` will be set
+       *                when the server is disconnected, or on error (and `errno` will be set
        *                accordingly).
        * @param breaker Is a pointer to a boolean variable that will break the infinite loop
        *                when is set to `true`, if left as `nullptr` then it will keep waiting for
@@ -181,7 +181,7 @@ namespace ramrod {
        *
        * @return `false` if there is no open connection.
        */
-      bool receive_all_concurrently(char *buffer, ssize_t *size, bool *breaker = nullptr,
+      bool receive_all_concurrently(void *buffer, std::size_t *size, bool *breaker = nullptr,
                                     const int flags = 0);
       /**
        * @brief Receives data from a TCP socket stream in a different thread
@@ -189,7 +189,7 @@ namespace ramrod {
        * @param buffer Is a pointer to the data you want to receive
        * @param size   Is a pointer to the number of bytes you want to receive, when the task is
        *               finished it will return the total number of bytes actually received, or 0 
-       *               when the server is disconnected, or -1 on error (and `errno` will be set
+       *               when the server is disconnected, or on error (and `errno` will be set
        *               accordingly).
        * @param flags  Allows you to specify more information about how the data is to be received.
        *          MSG_OOB      Receive as “out of band” data. This is how to get data that has
@@ -210,7 +210,7 @@ namespace ramrod {
        *
        * @return `false` if there is no open connection.
        */
-      bool receive_concurrently(char *buffer, ssize_t *size, const int flags = 0);
+      bool receive_concurrently(void *buffer, std::size_t *size, const int flags = 0);
       /**
        * @brief Reconnecting again
        *
@@ -248,7 +248,7 @@ namespace ramrod {
        * @return The number of bytes actually received, or 0 when the server is disconnected,
        *         or -1 on error (and `errno` will be set accordingly).
        */
-      ssize_t send(const char *buffer, const ssize_t size, const int flags = MSG_NOSIGNAL);
+      ssize_t send(const void *buffer, const std::size_t size, const int flags = MSG_NOSIGNAL);
       /**
        * @brief Sends all required sized data to a TCP socket stream
        *
@@ -276,7 +276,7 @@ namespace ramrod {
        * @return The number of bytes actually received, or 0 when the server is disconnected,
        *         or -1 on error (and `errno` will be set accordingly).
        */
-      ssize_t send_all(const char *buffer, const ssize_t size, bool *breaker = nullptr,
+      ssize_t send_all(const void *buffer, const std::size_t size, bool *breaker = nullptr,
                        const int flags = MSG_NOSIGNAL);
       /**
        * @brief Sends all required sized data to a TCP socket stream in a different thread
@@ -286,7 +286,7 @@ namespace ramrod {
        * @param buffer Is a pointer to the data you want to send
        * @param size   Is a pointer to the number of bytes you want to send, when the task is
        *               finished it will return the total number of bytes actually sent, or 0
-       *               when the server is disconnected, or -1 on error (and `errno` will be set
+       *               when the server is disconnected, or on error (and `errno` will be set
        *               accordingly).
        * @param breaker Is a pointer to a boolean variable that will break the infinite loop
        *                when is set to `true`, if left as `nullptr` then it will keep waiting for
@@ -307,7 +307,7 @@ namespace ramrod {
        *
        * @return `false` if there is no open connection.
        */
-      bool send_all_concurrently(const char *buffer, ssize_t *size, bool *breaker = nullptr,
+      bool send_all_concurrently(const void *buffer, std::size_t *size, bool *breaker = nullptr,
                                  const int flags = MSG_NOSIGNAL);
       /**
        * @brief Sends data to a TCP socket stream in a different thread
@@ -315,7 +315,7 @@ namespace ramrod {
        * @param buffer Is a pointer to the data you want to send
        * @param size   Is a pointer to the number of bytes you want to send, when the task is
        *               finished it will return the total number of bytes actually sent, or 0 
-       *               when the server is disconnected, or -1 on error (and `errno` will be set
+       *               when the server is disconnected, or on error (and `errno` will be set
        *               accordingly).
        * @param flags  Allows you to specify more information about how the data is to be sent.
        *          MSG_OOB       Send as “out of band” data. TCP supports this, and it’s a way to
@@ -333,7 +333,7 @@ namespace ramrod {
        *
        * @return `false` if there is no open connection.
        */
-      bool send_concurrently(const char *buffer, ssize_t *size, const int flags = MSG_NOSIGNAL);
+      bool send_concurrently(const void *buffer, std::size_t *size, const int flags = MSG_NOSIGNAL);
       /**
        * @brief Gettting the current time that this device will wait to try to connect
        *        again if the previous intent to establish a connection failed
@@ -352,12 +352,12 @@ namespace ramrod {
     private:
       bool close();
 
-      void concurrent_connector(const bool force = true, const bool wait = false);
+      void concurrent_connector(const bool wait = false);
 
-      void concurrent_receive(char *buffer, ssize_t *size, const int flags);
-      void concurrent_receive_all(char *buffer, ssize_t *size, bool *breaker, const int flags);
-      void concurrent_send(const char *buffer, ssize_t *size, const int flags);
-      void concurrent_send_all(const char *buffer, ssize_t *size, bool *breaker, const int flags);
+      void concurrent_receive(void *buffer, std::size_t *size, const int flags);
+      void concurrent_receive_all(void *buffer, std::size_t *size, bool *breaker, const int flags);
+      void concurrent_send(const void *buffer, std::size_t *size, const int flags);
+      void concurrent_send_all(const void *buffer, std::size_t *size, bool *breaker, const int flags);
 
       std::string ip_;
       int port_;

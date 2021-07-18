@@ -36,6 +36,7 @@ namespace ramrod {
       is_tcp_{false},
       client_{nullptr},
       results_{nullptr},
+      incoming_{},
       reconnection_time_(std::chrono::milliseconds(5000))
     {}
 
@@ -50,20 +51,19 @@ namespace ramrod {
 
       ip_ = ip;
       port_ = port;
-      connecting_.store(true);
       current_intent_ = 0;
       is_tcp_ = socket_type != SOCK_DGRAM;
-
       terminate_concurrent_.store(false);
 
       if(concurrent)
-        std::thread(&server::concurrent_connector, this, true, false).detach();
+        std::thread(&server::concurrent_connector, this, false).detach();
       else
-        concurrent_connector(true, true);
+        concurrent_connector(true);
       return true;
     }
 
     bool server::disconnect(){
+      connecting_.store(false);
       terminate_send_.store(true);
       terminate_receive_.store(true);
       terminate_concurrent_.store(true);
@@ -109,16 +109,34 @@ namespace ramrod {
         return 0;
 
       ssize_t received{0};
+      std::uint32_t error_counter{0};
 
-      if(is_tcp_)
-        received = ::recv(connected_fd_, buffer, size, flags);
-      else
-        received = ::recvfrom(socket_fd_, buffer, size, flags,
-                              client_->ai_addr, &client_->ai_addrlen);
-#ifdef VERBOSE
-      if(received <= 0) rr::perror("Receiving data " + std::to_string(socket_fd_) + " : " + std::to_string(connected_fd_));
-#endif
-      return received;
+      while(true){
+        if(is_tcp_)
+          received = ::recv(connected_fd_, buffer, size, flags);
+        else{
+          socklen_t addr_len;
+          received = ::recvfrom(socket_fd_, buffer, size, flags, &incoming_, &addr_len);
+          // Ignores data that does not come from the same client
+          if(std::strncmp(client_->ai_addr->sa_data, incoming_.sa_data, addr_len) != 0)
+            received = -1;
+        }
+
+        if(received == 0) return 0;
+
+        if(received < 0){
+  #ifdef VERBOSE
+          rr::perror("Receiving data");
+  #endif
+          if(++error_counter > max_intents_)
+            return received;
+
+          // This will try to receive the same data than the last time
+          std::this_thread::sleep_for(std::chrono::milliseconds(10));
+          continue;
+        }
+        return received;
+      }
     }
 
     ssize_t server::receive_all(void *buffer, const std::size_t size, bool *breaker,
@@ -129,21 +147,24 @@ namespace ramrod {
       std::size_t total_received{0};
       std::size_t bytes_left = size;
       ssize_t received_size;
+      socklen_t addr_len;
       std::uint32_t error_counter{0};
       bool never{false};
       if(breaker == nullptr) breaker = &never;
 
-      // TODO: change recvfrom so it doesn't modifies client_ and check if the data comes
-      // from only for initial client_ and nobody elses
       while(total_received < size && !(*breaker)){
         if(is_tcp_)
           received_size = ::recv(connected_fd_, (std::uint8_t*)buffer + total_received,
                                  bytes_left, flags);
-        else
+        else{
           received_size = ::recvfrom(socket_fd_, (std::uint8_t*)buffer + total_received,
-                                     bytes_left, flags, client_->ai_addr, &client_->ai_addrlen);
-        if(received_size == 0)
-          return 0;
+                                     bytes_left, flags, &incoming_, &addr_len);
+          // Ignores data that does not come from the same client
+          if(std::strncmp(client_->ai_addr->sa_data, incoming_.sa_data, addr_len) != 0)
+            continue;
+        }
+
+        if(received_size == 0) return 0;
 
         if(received_size < 0){
 #ifdef VERBOSE
@@ -151,10 +172,10 @@ namespace ramrod {
 #endif
           // There is an error and returns after the max intents have been reached
           if(++error_counter > max_intents_)
-            return -1;
+            return received_size;
 
           // This will try to receive the same data than the last time
-          std::this_thread::sleep_for(std::chrono::milliseconds(5));
+          std::this_thread::sleep_for(std::chrono::milliseconds(10));
           continue;
         }
         total_received += static_cast<std::size_t>(received_size);
@@ -189,30 +210,46 @@ namespace ramrod {
       if(connecting_.load()) return true;
       if(connected_.load()) disconnect();
 
-      connecting_.store(true);
       current_intent_ = 0;
-      terminate_concurrent_.store(true);
+      connecting_.store(true);
+      terminate_concurrent_.store(false);
 
       if(concurrent)
-        std::thread(&server::concurrent_connector, this, true, false).detach();
+        std::thread(&server::concurrent_connector, this, false).detach();
       else
-        concurrent_connector(true, true);
+        concurrent_connector(true);
       return true;
     }
 
-    ssize_t server::send(void *buffer, const std::size_t size, const int flags){
+    ssize_t server::send(const void *buffer, const std::size_t size, const int flags){
       if(!connected_.load() || size == 0)
         return 0;
 
-      ssize_t sent{::sendto(connected_fd_, buffer, size, flags,
-                            client_->ai_addr, client_->ai_addrlen)};
+      std::uint32_t error_counter{0};
+      ssize_t sent{0};
+
+      while(true){
+        sent = ::sendto(connected_fd_, buffer, size, flags,
+                        client_->ai_addr, client_->ai_addrlen);
+
+        if(sent == 0) return 0;
+
+        if(sent < 0){
 #ifdef VERBOSE
-      if(sent <= 0) rr::perror("Sending data");
+          rr::perror("Sending data");
 #endif
-      return sent;
+          if(++error_counter > max_intents_)
+            return sent;
+
+          // This will try to receive the same data than the last time
+          std::this_thread::sleep_for(std::chrono::milliseconds(10));
+          continue;
+        }
+        return sent;
+      }
     }
 
-    ssize_t server::send_all(void *buffer, const std::size_t size, bool *breaker,
+    ssize_t server::send_all(const void *buffer, const std::size_t size, bool *breaker,
                              const int flags){
       if(!connected_.load() || size == 0)
         return 0;
@@ -225,7 +262,7 @@ namespace ramrod {
       if(breaker == nullptr) breaker = &never;
 
       while(total_sent < size && !(*breaker)){
-        sent_size = ::sendto(connected_fd_, (std::uint8_t*)buffer + total_sent,
+        sent_size = ::sendto(connected_fd_, (const std::uint8_t*)buffer + total_sent,
                              bytes_left, flags, client_->ai_addr, client_->ai_addrlen);
         if(sent_size == 0)
           return 0;
@@ -236,10 +273,10 @@ namespace ramrod {
 #endif
           // There is an error and returns after the max intents have been reached
           if(++error_counter > max_intents_)
-            return -1;
+            return sent_size;
 
           // This will try to send the same data than the last time
-          std::this_thread::sleep_for(std::chrono::milliseconds(5));
+          std::this_thread::sleep_for(std::chrono::milliseconds(10));
           continue;
         }
         total_sent += static_cast<std::size_t>(sent_size);
@@ -293,10 +330,8 @@ namespace ramrod {
       if(::shutdown(socket_fd_, SHUT_RDWR) == -1)
         rr::perror("Connection cannot be shutdown");
 
-      if(::close(socket_fd_) == -1){
+      if(::close(socket_fd_) == -1)
         rr::perror("Connection cannot be closed");
-        return false;
-      }
 
       socket_fd_ = -1;
       return true;
@@ -320,24 +355,18 @@ namespace ramrod {
       if(::shutdown(connected_fd_, SHUT_RDWR) == -1)
         rr::perror("Children connection cannot be shutdown");
 
-      if(::close(connected_fd_) == -1){
+      if(::close(connected_fd_) == -1)
         rr::perror("Children connection cannot be closed");
-        connected_.store(false);
-        return true;
-      }
 
       connected_fd_ = -1;
       connected_.store(false);
       return true;
     }
 
-    void server::concurrent_connector(const bool force, const bool wait){
-      if(!force && terminate_concurrent_.load()){
-        terminate_concurrent_.store(false);
-        return;
-      }
+    void server::concurrent_connector(const bool wait){
       if(connected_.load()) return;
 
+      connecting_.store(true);
       int status;
       struct addrinfo hints;
 
@@ -397,14 +426,17 @@ namespace ramrod {
         std::this_thread::sleep_for(reconnection_time_);
 
         // Terminates the pending connection in case disconnect() is called:
-        if(terminate_concurrent_.load()) return;
+        if(terminate_concurrent_.load()){
+          connecting_.store(false);
+          return;
+        }
 
         rr::attention("Reconnecting!");
 
         if(wait)
-          concurrent_connector(false, true);
+          concurrent_connector(true);
         else
-          std::thread(&server::concurrent_connector, this, false, false).detach();
+          std::thread(&server::concurrent_connector, this, false).detach();
 
         return;
       }
@@ -457,6 +489,7 @@ namespace ramrod {
 #endif
         return;
       }
+
       // In case is TCP then we must accept an incomming connection
       if(wait)
         concurrent_connection();
@@ -483,8 +516,9 @@ namespace ramrod {
 #endif
         connected_.store(true);
         connecting_.store(false);
-        terminate_receive_.store(false);
         terminate_send_.store(false);
+        terminate_receive_.store(false);
+        terminate_concurrent_.store(true);
 
         break;
       }
@@ -492,15 +526,38 @@ namespace ramrod {
 
     void server::concurrent_receive(void *buffer, std::size_t *size, const int flags){
       ssize_t received{0};
-      if(is_tcp_)
-        received = ::recv(connected_fd_, buffer, *size, flags);
-      else
-        received = ::recvfrom(socket_fd_, buffer, *size, flags,
-                              client_->ai_addr, &client_->ai_addrlen);
-#ifdef VERBOSE
-      if(received <= 0) rr::perror("Receiving data");
-#endif
+      std::uint32_t error_counter{0};
+
+      while(true){
+        if(is_tcp_)
+          received = ::recv(connected_fd_, buffer, *size, flags);
+        else{
+          socklen_t addr_len;
+          received = ::recvfrom(socket_fd_, buffer, *size, flags, &incoming_, &addr_len);
+          // Ignores data that does not come from the same client
+          if(std::strncmp(client_->ai_addr->sa_data, incoming_.sa_data, addr_len) != 0)
+            received = -1;
+        }
+
+        if(received == 0) break;
+
+        if(received < 0){
+  #ifdef VERBOSE
+          rr::perror("Receiving data");
+  #endif
+          if(++error_counter > max_intents_){
+            *size = 0;
+            return;
+          }
+
+          // This will try to receive the same data than the last time
+          std::this_thread::sleep_for(std::chrono::milliseconds(10));
+          continue;
+        }
+        break;
+      }
       *size = static_cast<std::size_t>(received);
+      return;
     }
 
     void server::concurrent_receive_all(void *buffer, std::size_t *size, bool *breaker,
@@ -509,16 +566,22 @@ namespace ramrod {
       std::size_t bytes_left = *size;
       ssize_t received_size;
       std::uint32_t error_counter{0};
+      socklen_t addr_len;
       bool never{false};
       if(breaker == nullptr) breaker = &never;
 
-      while(total_received < *size && !terminate_send_.load() && !(*breaker)){
+      while(total_received < *size && !terminate_receive_.load() && !(*breaker)){
         if(is_tcp_)
           received_size = ::recv(connected_fd_, (std::uint8_t*)buffer + total_received,
                                  bytes_left, flags);
-        else
+        else{
           received_size = ::recvfrom(socket_fd_, (std::uint8_t*)buffer + total_received,
-                                     bytes_left, flags, client_->ai_addr, &client_->ai_addrlen);
+                                     bytes_left, flags, &incoming_, &addr_len);
+          // Ignores data that does not come from the same client
+          if(std::strncmp(client_->ai_addr->sa_data, incoming_.sa_data, addr_len) != 0)
+            continue;
+        }
+
         if(received_size == 0){
           *size = 0;
           return;
@@ -530,12 +593,12 @@ namespace ramrod {
 #endif
           // There is an error and returns after the max intents have been reached
           if(++error_counter > max_intents_){
-            *size = std::size_t(-1);
+            *size = 0;
             return;
           }
 
           // This will try to receive the same data than the last time
-          std::this_thread::sleep_for(std::chrono::milliseconds(5));
+          std::this_thread::sleep_for(std::chrono::milliseconds(10));
           continue;
         }
         total_received += static_cast<std::size_t>(received_size);
@@ -545,12 +608,32 @@ namespace ramrod {
     }
 
     void server::concurrent_send(const void *buffer, std::size_t *size, const int flags){
-      ssize_t sent{::sendto(connected_fd_, buffer, *size, flags,
-                            client_->ai_addr, client_->ai_addrlen)};
+      std::uint32_t error_counter{0};
+      ssize_t sent{0};
+
+      while(true){
+        sent = ::sendto(connected_fd_, buffer, *size, flags,
+                        client_->ai_addr, client_->ai_addrlen);
+
+        if(sent == 0) break;
+
+        if(sent < 0){
 #ifdef VERBOSE
-      if(sent <= 0) rr::perror("Sending data");
+          rr::perror("Sending data");
 #endif
+          if(++error_counter > max_intents_){
+            *size = 0;
+            return;
+          }
+
+          // This will try to receive the same data than the last time
+          std::this_thread::sleep_for(std::chrono::milliseconds(10));
+          continue;
+        }
+        break;
+      }
       *size = static_cast<std::size_t>(sent);
+      return;
     }
 
     void server::concurrent_send_all(const void *buffer, std::size_t *size, bool *breaker,
@@ -563,7 +646,7 @@ namespace ramrod {
       if(breaker == nullptr) breaker = &never;
 
       while(total_sent < *size && !terminate_send_.load() && !(*breaker)){
-        sent_size = ::sendto(connected_fd_, (std::uint8_t*)buffer + total_sent,
+        sent_size = ::sendto(connected_fd_, (const std::uint8_t*)buffer + total_sent,
                              bytes_left, flags, client_->ai_addr, client_->ai_addrlen);
         if(sent_size == 0){
           *size = 0;
@@ -576,12 +659,12 @@ namespace ramrod {
 #endif
           // There is an error and returns after the max intents have been reached
           if(++error_counter > max_intents_){
-            *size = std::size_t(-1);
+            *size = 0;
             return;
           }
 
           // This will try to receive the same data than the last time
-          std::this_thread::sleep_for(std::chrono::milliseconds(5));
+          std::this_thread::sleep_for(std::chrono::milliseconds(10));
           continue;
         }
         total_sent += static_cast<std::size_t>(sent_size);
