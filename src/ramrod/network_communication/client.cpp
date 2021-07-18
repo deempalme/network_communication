@@ -372,13 +372,11 @@ namespace ramrod {
                         << " seconds... (#" << current_intent_ << ")" << rr::endl;
         std::this_thread::sleep_for(reconnection_time_);
 
-        rr::attention("before terminate");
         // Terminates the pending connection in case disconnect() is called:
         if(terminate_concurrent_.load()){
           connecting_.store(false);
           return;
         }
-        rr::attention("after terminate");
 
         rr::attention("Reconnecting!");
 
