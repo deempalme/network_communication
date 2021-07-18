@@ -47,20 +47,19 @@ namespace ramrod {
 
       ip_ = ip;
       port_ = port;
-      connecting_.store(true);
       current_intent_ = 0;
       is_tcp_ = socket_type != SOCK_DGRAM;
-
       terminate_concurrent_.store(false);
 
       if(concurrent)
-        std::thread(&client::concurrent_connector, this, true, false).detach();
+        std::thread(&client::concurrent_connector, this, false).detach();
       else
-        concurrent_connector(true, true);
+        concurrent_connector(true);
       return true;
     }
 
     bool client::disconnect(){
+      connecting_.store(false);
       terminate_send_.store(true);
       terminate_receive_.store(true);
       terminate_concurrent_.store(true);
@@ -187,13 +186,14 @@ namespace ramrod {
       if(connecting_.load()) return true;
       if(connected_.load()) disconnect();
 
-      connecting_.store(true);
       current_intent_ = 0;
+      connecting_.store(true);
+      terminate_concurrent_.store(false);
 
       if(concurrent)
-        std::thread(&client::concurrent_connector, this, true, false).detach();
+        std::thread(&client::concurrent_connector, this, false).detach();
       else
-        concurrent_connector(true, true);
+        concurrent_connector(true);
       return true;
     }
 
@@ -306,23 +306,18 @@ namespace ramrod {
       if(::shutdown(socket_fd_, SHUT_RDWR) == -1)
         rr::perror("Connection cannot be shutdown");
 
-      if(::close(socket_fd_) == -1){
+      if(::close(socket_fd_) == -1)
         rr::perror("Connection cannot be closed");
-        return false;
-      }
 
       socket_fd_ = -1;
       connected_.store(false);
       return true;
     }
 
-    void client::concurrent_connector(const bool force, const bool wait){
-      if(!force && terminate_concurrent_.load()){
-        terminate_concurrent_.store(false);
-        return;
-      }
+    void client::concurrent_connector(const bool wait){
       if(connected_.load()) return;
 
+      connecting_.store(true);
       int status;
       struct addrinfo hints;
       struct addrinfo *results; // Will point to the results
@@ -349,6 +344,12 @@ namespace ramrod {
           continue;
         }
 
+        if(::setsockopt(socket_fd_, SOL_SOCKET, SO_REUSEADDR, &status, sizeof(int)) == -1){
+          rr::perror("Setting socket options");
+          ::close(socket_fd_);
+          return;
+        }
+
         // Connecting to the server
         if(::connect(socket_fd_, pointer->ai_addr, pointer->ai_addrlen) == -1){
           rr::perror("Connecting");
@@ -371,15 +372,20 @@ namespace ramrod {
                         << " seconds... (#" << current_intent_ << ")" << rr::endl;
         std::this_thread::sleep_for(reconnection_time_);
 
+        rr::attention("before terminate");
         // Terminates the pending connection in case disconnect() is called:
-        if(terminate_concurrent_.load()) return;
+        if(terminate_concurrent_.load()){
+          connecting_.store(false);
+          return;
+        }
+        rr::attention("after terminate");
 
         rr::attention("Reconnecting!");
 
         if(wait)
-          concurrent_connector(false, true);
+          concurrent_connector(true);
         else
-          std::thread(&client::concurrent_connector, this, false, false).detach();
+          std::thread(&client::concurrent_connector, this, false).detach();
 
         return;
       }
@@ -397,17 +403,20 @@ namespace ramrod {
       }
       // END TODO:
 
-      char outgoing[11] = "identifier";
-      if(::send(socket_fd_, outgoing, sizeof(outgoing), MSG_NOSIGNAL) < 0){
+      if(!is_tcp_){
+        char outgoing[11] = "identifier";
+        if(::send(socket_fd_, outgoing, sizeof(outgoing), MSG_NOSIGNAL) < 0){
 #ifdef VERBOSE
-        rr::perror("Sending identifier");
+          rr::perror("Sending identifier");
 #endif
+        }
       }
 
       connected_.store(true);
       connecting_.store(false);
-      terminate_receive_.store(false);
       terminate_send_.store(false);
+      terminate_receive_.store(false);
+      terminate_concurrent_.store(true);
 #ifdef VERBOSE
       rr::attention("Connected to server!");
 #endif

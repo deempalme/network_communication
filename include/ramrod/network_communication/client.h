@@ -352,7 +352,7 @@ namespace ramrod {
     private:
       bool close();
 
-      void concurrent_connector(const bool force = true, const bool wait = false);
+      void concurrent_connector(const bool wait = false);
 
       void concurrent_receive(void *buffer, std::size_t *size, const int flags);
       void concurrent_receive_all(void *buffer, std::size_t *size, bool *breaker, const int flags);
