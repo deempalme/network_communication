@@ -58,6 +58,10 @@ namespace ramrod {
       return true;
     }
 
+    bool client::connecting(){
+      return connecting_.load(std::memory_order_relaxed);
+    }
+
     bool client::disconnect(){
       connecting_.store(false);
       terminate_send_.store(true);

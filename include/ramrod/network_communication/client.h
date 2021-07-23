@@ -40,6 +40,12 @@ namespace ramrod {
       bool connect(const std::string &ip, const int port = 1313,
                    const int socket_type = SOCK_STREAM, const bool concurrent = true);
       /**
+       * @brief Indicates if the client is currently trying to connect to the server
+       *
+       * @return `true` if is actually trying to connect to the server
+       */
+      bool connecting();
+      /**
        * @brief Disconnects this device from the current connected network's device
        *
        * @return `false` if the connection cannot be closed
