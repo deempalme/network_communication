@@ -6,10 +6,12 @@
 #include <sys/types.h>   // for ssize_t
 #include <sys/socket.h>  // for recv, send, MSG_NOSIGNAL, accept
 #include <chrono>        // for duration
+#include <iosfwd>        // for size_t
 #include <ratio>         // for milli
 #include <string>        // for string
 
-#include "ramrod/network_communication/conversor.h"
+#include "ramrod/network_communication/conversor.h"  // for conversor
+
 
 namespace ramrod {
   namespace network_communication {
