@@ -1,5 +1,5 @@
 #cmake version
-cmake_minimum_required(VERSION 3.12...3.15)
+cmake_minimum_required(VERSION 3.5...3.15)
 
 if(NOT TARGET ${RamRodNetwork_LIBRARIES})
   project(RamRodNetwork
@@ -84,7 +84,7 @@ if(NOT TARGET ${RamRodNetwork_LIBRARIES})
     if(${CMAKE_HOST_SYSTEM_NAME} MATCHES "Linux")
       find_program(iwyu_path NAMES include-what-you-use iwyu)
       if(NOT iwyu_path)
-        message(FATAL_ERROR "Could not find the program include-what-you-use")
+        message(WARNING "Could not find the program include-what-you-use")
       else()
         message(STATUS "include-what-you-use found: ${iwyu_path}")
         get_filename_component(PARENT_DIR ${iwyu_path} DIRECTORY)
