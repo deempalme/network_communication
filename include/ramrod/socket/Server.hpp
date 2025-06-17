@@ -3,10 +3,11 @@
 
 #include <cstdint>     // for uint32_t, uint16_t
 #include <string>      // for string
+#include <string_view> // for string_view
 #include <sys/types.h> // for ssize_t
 
 #include "ramrod/socket/Conversor.hpp"   // for Conversor
-#include "ramrod/socket/Enumerators.hpp" // for Protocol, SocketType
+#include "ramrod/socket/Enumerators.hpp" // for ErrorType, Family, SocketType
 
 struct addrinfo;
 
@@ -21,16 +22,30 @@ namespace ramrod::socket
         /**
          * @brief Connect to client.
          *
+         * If \p ip is empty, then the network address will be set to the loopback
+         * interface address; this is used by applications that intend to communicate
+         * with peers running on the same host.
+         *
+         * If \p port is zero, then the port number of the returned socket addresses
+         * will be left uninitialized.
+         *
+         * \p port numbers above 0 and below 1024 are reserved (superusers may use them).
+         *
+         * Either \p ip or \p port may be empty, but not both.
+         *
+         * If \p ip_family is set to UNSPECIFIED, then either IPv4 or IPv6 could be used
+         * based on availability.
+         *
          * @param[in] ip           IP address to connect
          * @param[in] port         Port number to where the connection will be made
-         * @param[in] ip_protocol  Defines the IP version to use
+         * @param[in] ip_family    Defines the IP version to use
          * @param[in] socket_type  Defines the type of connection
          *
          * @return False if connection failed or it is already connected
          */
         bool connect(const std::string &ip,
                      const std::uint16_t port,
-                     const Protocol ip_protocol = Protocol::IPV4,
+                     const Family ip_family = Family::IPV4,
                      const SocketType socket_type = SocketType::STREAM);
 
         /**
@@ -52,7 +67,7 @@ namespace ramrod::socket
          *
          * @return IP protocol version
          */
-        Protocol ip_protocol();
+        Family ip_family();
 
         /**
          * @brief Indicate if there is connection with client.
@@ -74,9 +89,9 @@ namespace ramrod::socket
         /**
          * @brief Get the full description of the last encountered error.
          *
-         * @return String with the detailes description of the last encountered error
+         * @return String with the detailed description of the last encountered error
          */
-        const std::string_view& last_error_detail();
+        const char *last_error_detail();
 
         /**
          * @brief Get current port.
@@ -88,9 +103,9 @@ namespace ramrod::socket
         /**
          * @brief Receive data from a socket stream.
          *
-         * @param buffer Is a pointer to the data you want to receive
-         * @param size   Is the number of bytes you want to receive
-         * @param flags  Allows you to specify more information about how the data is to be received.
+         * @param[out] buffer Output buffer where received data will be saved
+         * @param[in] size    Is the number of bytes you want to receive
+         * @param[in] flags   Allows you to specify more information about how the data is to be received.
          *          MSG_OOB      Receive as “out of band” data. This is how to get data that has
          *                       been sent to you with the `MSG_OOB` flag in `send()`. As the
          *                       receiving side, you will have had signal `SIGURG` raised telling
@@ -161,16 +176,33 @@ namespace ramrod::socket
         SocketType socket_type();
 
     private:
-        std::string ip_;
-        Protocol ip_protocol_;
-        std::uint16_t port_;
-        SocketType socket_type_;
+        /// @brief IP where socket should be listening
+        std::string target_ip_;
+        /// @brief Family that socket should have
+        Family target_family_;
+        /// @brief Port where socket should be listening
+        std::uint16_t target_port_;
+        /// @brief Type that socket should have
+        SocketType target_socket_type_;
 
-        int socket_fd_;
-        int connected_fd_;
+        struct SocketInfo
+        {
+            /// @brief Socket's file descriptor
+            int fd{};
+            /// @brief Socket's IP family version
+            Family family{};
+            /// @brief Socket's port
+            std::uint16_t port{};
+            /// @brief Socket's type
+            SocketType type{};
+            /// @brief Socket's IP address
+            std::string ip{};
+        };
+        /// @brief Parameters of active socket (listening)
+        SocketInfo active_socket_;
 
-        bool connected_;
         ErrorType last_error_;
+        int last_error_code_;
     };
 } // namespace: ramrod::socket
 
