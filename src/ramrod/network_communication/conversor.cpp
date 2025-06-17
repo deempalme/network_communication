@@ -1,57 +1,92 @@
 #include "ramrod/network_communication/conversor.h"
 
-#include <netinet/in.h>  // for htonl, htons, ntohl, ntohs
+#include <cstdint>      // for uint64_t, uint32_t, uint16_t
+#include <netinet/in.h> // for htonl, htons, ntohl, ntohs
+#include <type_traits>  // for is_unsigned
 
-namespace ramrod::network_communication {
-  std::uint16_t conversor::host_to_network(const std::uint16_t host_value){
-    return ::htons(host_value);
-  }
+namespace ramrod::socket
+{
+    template <>
+    std::uint16_t Conversor::host_to_network(const std::uint16_t value)
+    {
+        return ::htons(value);
+    }
 
-  std::uint32_t conversor::host_to_network(const std::uint32_t host_value){
-    return ::htonl(host_value);
-  }
+    template <>
+    std::uint32_t Conversor::host_to_network(const std::uint32_t value)
+    {
+        return ::htonl(value);
+    }
 
-  std::uint64_t conversor::host_to_network(const std::uint64_t host_value){
-    union {
-      std::uint64_t result;
-      std::uint8_t bytes[8];
-    };
+    template <>
+    std::uint64_t Conversor::host_to_network(const std::uint64_t value)
+    {
+        union
+        {
+            std::uint64_t result;
+            std::uint8_t bytes[8];
+        };
 
-    bytes[0] = (host_value & 0x00000000000000ff);
-    bytes[1] = (host_value & 0x000000000000ff00) >> 8;
-    bytes[2] = (host_value & 0x0000000000ff0000) >> 16;
-    bytes[3] = (host_value & 0x00000000ff000000) >> 24;
-    bytes[4] = (host_value & 0x000000ff00000000) >> 32;
-    bytes[5] = (host_value & 0x0000ff0000000000) >> 40;
-    bytes[6] = (host_value & 0x00ff000000000000) >> 48;
-    bytes[7] = (host_value & 0xff00000000000000) >> 56;
+        bytes[0] = static_cast<std::uint8_t>(value & 0x00000000000000fful);
+        bytes[1] = static_cast<std::uint8_t>((value & 0x000000000000ff00ul) >> 8u);
+        bytes[2] = static_cast<std::uint8_t>((value & 0x0000000000ff0000ul) >> 16u);
+        bytes[3] = static_cast<std::uint8_t>((value & 0x00000000ff000000ul) >> 24u);
+        bytes[4] = static_cast<std::uint8_t>((value & 0x000000ff00000000ul) >> 32u);
+        bytes[5] = static_cast<std::uint8_t>((value & 0x0000ff0000000000ul) >> 40u);
+        bytes[6] = static_cast<std::uint8_t>((value & 0x00ff000000000000ul) >> 48u);
+        bytes[7] = static_cast<std::uint8_t>((value & 0xff00000000000000ul) >> 56u);
 
-    return result;
-  }
+        return result;
+    }
 
-  std::uint16_t conversor::network_to_host(const std::uint16_t network_value){
-    return ::ntohs(network_value);
-  }
+    template <typename T>
+    T Conversor::host_to_network(const T value)
+    {
+        static_assert(std::is_unsigned<T>::value(),
+                      "host_to_network() only accepts unsigned integers");
 
-  std::uint32_t conversor::network_to_host(const std::uint32_t network_value){
-    return ::ntohl(network_value);
-  }
+        return host_to_network<T>(value);
+    }
 
-  std::uint64_t conversor::network_to_host(const std::uint64_t network_value){
-    union {
-      std::uint64_t input;
-      std::uint8_t bytes[8];
-    };
+    template <>
+    std::uint16_t Conversor::network_to_host(const std::uint16_t value)
+    {
+        return ::ntohs(value);
+    }
 
-    input = network_value;
+    template <>
+    std::uint32_t Conversor::network_to_host(const std::uint32_t value)
+    {
+        return ::ntohl(value);
+    }
 
-    return bytes[0] |
-        ((std::uint64_t)bytes[1]) <<  8 |
-        ((std::uint64_t)bytes[2]) << 16 |
-        ((std::uint64_t)bytes[3]) << 24 |
-        ((std::uint64_t)bytes[4]) << 32 |
-        ((std::uint64_t)bytes[5]) << 40 |
-        ((std::uint64_t)bytes[6]) << 48 |
-        ((std::uint64_t)bytes[7]) << 56;
-  }
+    template <>
+    std::uint64_t Conversor::network_to_host(const std::uint64_t value)
+    {
+        union
+        {
+            std::uint64_t input;
+            std::uint8_t bytes[8];
+        };
+
+        input = value;
+
+        return bytes[0] |
+               static_cast<std::uint64_t>(bytes[1]) << 8u |
+               static_cast<std::uint64_t>(bytes[2]) << 16u |
+               static_cast<std::uint64_t>(bytes[3]) << 24u |
+               static_cast<std::uint64_t>(bytes[4]) << 32u |
+               static_cast<std::uint64_t>(bytes[5]) << 40u |
+               static_cast<std::uint64_t>(bytes[6]) << 48u |
+               static_cast<std::uint64_t>(bytes[7]) << 56u;
+    }
+
+    template <typename T>
+    T Conversor::network_to_host(const T value)
+    {
+        static_assert(std::is_unsigned<T>::value(),
+                      "network_to_host() only accepts unsigned integers");
+
+        return network_to_host<T>(value);
+    }
 } // namespace ramrod::network_communication
