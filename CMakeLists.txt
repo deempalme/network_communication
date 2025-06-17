@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.15)
 
 if(NOT TARGET ${RamRodNetwork_LIBRARIES})
     project(RamRodNetwork
-        VERSION 0.8.0
+        VERSION 1.0.0
         DESCRIPTION "Ram-Rod's Network communication library"
         LANGUAGES CXX C
     )
@@ -24,11 +24,14 @@ if(NOT TARGET ${RamRodNetwork_LIBRARIES})
     #header files
     set(UNIT_HPP_FILES
         ${INC_DIR}/Conversor.hpp
+        ${INC_DIR}/Enumerators.hpp
+        ${INC_DIR}/Server.hpp
     )
 
     #source files
     set(UNIT_CPP_FILES
         ${SRC_DIR}/Conversor.cpp
+        ${SRC_DIR}/Server.cpp
     )
 
     #add every file to the executable
@@ -42,8 +45,6 @@ if(NOT TARGET ${RamRodNetwork_LIBRARIES})
 
     target_sources(${PROJECT_NAME}
         PRIVATE
-        src/ramrod/network_communication/client.cpp
-        src/ramrod/network_communication/server.cpp
         ${UNIT_CPP_FILES}
         ${UNIT_HPP_FILES}
     )
