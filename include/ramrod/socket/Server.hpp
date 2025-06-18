@@ -20,7 +20,11 @@ namespace ramrod::socket
         virtual ~Server();
 
         /**
-         * @brief Connect to client.
+         * @brief Create a server socket that allows connection to client.
+         *
+         * This must be called at least once before any call to \p connect() is made,
+         * it creates a server that will allow client connections, you can limit who
+         * connects by using \p ip, \p port, \p ip_family, and \p socket_type
          *
          * If \p ip is empty, then the network address will be set to the loopback
          * interface address; this is used by applications that intend to communicate
@@ -43,17 +47,19 @@ namespace ramrod::socket
          *
          * @return False if connection failed or it is already connected
          */
-        bool connect(const std::string &ip,
+        bool create(const std::string &ip,
                      const std::uint16_t port,
                      const Family ip_family = Family::IPV4,
                      const SocketType socket_type = SocketType::STREAM);
 
         /**
-         * @brief Disconnect this server from the current connected client.
+         * @brief Destroy this server socket from the current connected client.
          *
-         * @return False if the connection cannot be closed
+         * All client's connection will also be closed.
+         *
+         * @return False if the server cannot be destroyed
          */
-        bool disconnect();
+        bool destroy();
 
         /**
          * @brief Get current IP address.
@@ -128,20 +134,15 @@ namespace ramrod::socket
         ssize_t receive(void *buffer, const std::size_t size, const int flags = 0);
 
         /**
-         * @brief Reconnect using same parameters.
+         * @brief Recreate server using same parameters.
          *
-         * This will disconnect any previous connection (if exist) and try to connect again
-         * to the network's device selected in the function `connect()`, and, as in `connect()`
-         * it will also be performed in a different thread.
+         * This will destroy any previos server and disconnect any previous client (if exist)
+         * and try to create server again, you must look for clients once more.
          *
-         * @param concurrent Indicates if the reconnection should be made in a different thread,
-         *                   in this way the main thread should not await for the server to
-         *                   connect with us
-         *
-         * @return `false` if there is no IP or port selected, it will return `true` if
-         *          there is an open pending connection, or already waiting for connection
+         * @return  False if there \p create() has not been called at least once, or true
+         *          if server was recreated successfully
          */
-        bool reconnect();
+        bool recreate();
 
         /**
          * @brief Send data to a socket stream.

@@ -40,12 +40,14 @@ namespace ramrod::socket
         CLOSE_ERROR,
         /// @brief Error when creating socket
         CREATE_SOCKET_ERROR,
+        /// @brief Failed signal connection failed to reap all dead processes
+        DEAD_PROCESSES_REAPING_CONNECTION_FAILED,
         /// @brief Converting IP from number to string failed
         IP_CONVERSION_FAILED,
+        /// @brief No socket is available with given parameters
+        NO_SOCKET_AVAILABLE,
         /// @brief Error when setting socket options
         SET_SOCKET_OPTION_ERROR,
-        /// @brief Socket's shutdown encountered an error
-        SHUTDOWN_ERROR,
         /// @brief System error
         SYSTEM_ERROR,
     };

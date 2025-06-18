@@ -140,6 +140,18 @@ namespace
             return SocketType::STREAM;
         }
     }
+
+    /**
+     * @brief Reap dead processes.
+     */
+    void signal_children_handler(const int /*signal*/)
+    {
+        // waitpid() might overwrite errno, so we save and restore it:
+        const int saved_errno = errno;
+        while (::waitpid(-1, nullptr, WNOHANG) > 0)
+            ;
+        errno = saved_errno;
+    }
 }
 
 namespace ramrod::socket
@@ -161,10 +173,10 @@ namespace ramrod::socket
         disconnect();
     }
 
-    bool Server::connect(const std::string &ip,
-                         const std::uint16_t port,
-                         const Family ip_family,
-                         const SocketType socket_type)
+    bool Server::create(const std::string &ip,
+                        const std::uint16_t port,
+                        const Family ip_family,
+                        const SocketType socket_type)
     {
         if (active_socket_.fd != BAD_SOCKET)
         {
@@ -291,21 +303,34 @@ namespace ramrod::socket
         if (results != nullptr)
             ::freeaddrinfo(results);
 
+        if (client == nullptr)
+        {
+            last_error_ = ErrorType::NO_SOCKET_AVAILABLE;
+            active_socket_ = {};
+            active_socket_.fd = BAD_SOCKET;
+            return false;
+        }
+
+        // Creating a signal connection to reap all dead processes
+        struct sigaction signal_action;
+        signal_action.sa_handler = signal_children_handler;
+        ::sigemptyset(&signal_action.sa_mask);
+        signal_action.sa_flags = SA_RESTART;
+        if (::sigaction(SIGCHLD, &signal_action, nullptr) == ERROR)
+        {
+            last_error_ = ErrorType::DEAD_PROCESSES_REAPING_CONNECTION_FAILED;
+            last_error_code_ = errno;
+        }
+
         return active_socket_.fd != BAD_SOCKET;
     }
 
-    bool Server::disconnect()
+    bool Server::destroy()
     {
         bool ok{true};
 
         if (active_socket_.fd != BAD_SOCKET)
         {
-            if (::shutdown(active_socket_.fd, SHUT_RDWR) == ERROR)
-            {
-                last_error_ = ErrorType::SHUTDOWN_ERROR;
-                last_error_code_ = errno;
-                ok = false;
-            }
             if (::close(active_socket_.fd) == ERROR)
             {
                 last_error_ = ErrorType::CLOSE_ERROR;
@@ -350,6 +375,10 @@ namespace ramrod::socket
         case ErrorType::ALREADY_CONNECTED:
             static constexpr char ALREADY_CONNECTED_MSG[]{"There is already an active connection"};
             return ALREADY_CONNECTED_MSG;
+        case ErrorType::NO_SOCKET_AVAILABLE:
+            static constexpr char NO_SOCKET_AVAILABLE_MSG[]{
+                "No socket is available with given parameters"};
+            return NO_SOCKET_AVAILABLE_MSG;
         case ErrorType::ADDRESS_INFO_BAD_FLAGS:
         case ErrorType::ADDRESS_INFO_FAMILY_NOT_SUPPORTED:
         case ErrorType::ADDRESS_INFO_NO_ADDRESS_DEFINED:
@@ -365,9 +394,9 @@ namespace ramrod::socket
         case ErrorType::BIND_SOCKET_ERROR:
         case ErrorType::CLOSE_ERROR:
         case ErrorType::CREATE_SOCKET_ERROR:
+        case ErrorType::DEAD_PROCESSES_REAPING_CONNECTION_FAILED:
         case ErrorType::IP_CONVERSION_FAILED:
         case ErrorType::SET_SOCKET_OPTION_ERROR:
-        case ErrorType::SHUTDOWN_ERROR:
         case ErrorType::SYSTEM_ERROR:
             return std::strerror(last_error_code_);
         default:
@@ -385,10 +414,18 @@ namespace ramrod::socket
     {
     }
 
-    bool Server::reconnect()
+    bool Server::recreate()
     {
-        disconnect();
-        return connect(target_ip_, target_port_, target_family_, target_socket_type_);
+        destroy();
+        static constexpr std::uint16_t EMPTY_PORT{};
+        if (target_ip_.empty() &&
+            (target_family_ == Family::UNSPECIFIED) &&
+            (target_port_ == EMPTY_PORT) &&
+            (target_socket_type_ == SocketType::STREAM))
+        {
+            return false;
+        }
+        return create(target_ip_, target_port_, target_family_, target_socket_type_);
     }
 
     ssize_t Server::send(const void *buffer, const std::size_t size, const int flags)
@@ -398,18 +435,5 @@ namespace ramrod::socket
     SocketType Server::socket_type()
     {
         return active_socket_.type;
-    }
-
-    // :::::::::::::::::::::::::::::::::::: PRIVATE FUNCTIONS ::::::::::::::::::::::::::::::::::::
-
-    // :::::::::::::::::::::::::::::::::::: OUTTER FUNCTIONS :::::::::::::::::::::::::::::::::::
-
-    void signal_children_handler(const int /*signal*/)
-    {
-        // waitpid() might overwrite errno, so we save and restore it:
-        const int saved_errno = errno;
-        while (::waitpid(-1, nullptr, WNOHANG) > 0)
-            ;
-        errno = saved_errno;
     }
 } // namespace: ramrod::socket
