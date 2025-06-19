@@ -23,14 +23,20 @@ if(NOT TARGET ${RamRodNetwork_LIBRARIES})
 
     #header files
     set(UNIT_HPP_FILES
+        ${INC_DIR}/BasicSocket.hpp
+        ${INC_DIR}/Client.hpp
         ${INC_DIR}/Conversor.hpp
         ${INC_DIR}/Enumerators.hpp
+        ${INC_DIR}/ErrorHandler.hpp
         ${INC_DIR}/Server.hpp
     )
 
     #source files
     set(UNIT_CPP_FILES
+        ${SRC_DIR}/BasicSocket.cpp
+        ${SRC_DIR}/Client.cpp
         ${SRC_DIR}/Conversor.cpp
+        ${SRC_DIR}/ErrorHandler.cpp
         ${SRC_DIR}/Server.cpp
     )
 

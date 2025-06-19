@@ -6,8 +6,9 @@
 #include <netdb.h>      // for addrinfo, freeaddrinfo, gai_st...
 #include <signal.h>     // for sigaction, sigemptyset, SA_RES...
 #include <sys/socket.h> // for recv, send, MSG_NOSIGNAL, accept
+#include <sys/types.h>  // for ssize_t
 #include <sys/wait.h>   // for waitpid, WNOHANG
-#include <unistd.h>     // for ssize_t, close
+#include <unistd.h>     // for close
 
 namespace
 {
@@ -17,128 +18,32 @@ namespace
     static constexpr int ERROR{-1};
 
     /**
-     * @brief Get ErrorType from getaddrinfo() returned status.
+     * @brief Get IPv4 or IPv6 address from \b sockaddr.
      *
-     * @param[in] get_addr_info_status  Status returned by getaddrinfo()
+     * @param[in] sa     Sockect address structure returned from \b getaddrinfo()
+     * @param[out] port  Will set this value from incoming \p sa port
      *
-     * @return An error enum compatible with Server class
+     * @return a void pointer to an IPv4's in_addr or IPv6's in6_addr compatible with \b inet_ntop()
      */
-    ramrod::socket::ErrorType get_error_type(const int get_addr_info_status)
+    void *get_in_address(struct sockaddr *sa, std::uint16_t &port)
     {
-        using namespace ramrod::socket;
+        struct sockaddr_in *ipv4;
+        struct sockaddr_in6 *ipv6;
 
-        switch (get_addr_info_status)
+        // get the pointer to the address itself,
+        // different fields in IPv4 and IPv6:
+        if (sa->sa_family == AF_INET)
         {
-        case EAI_BADFLAGS:
-            return ErrorType::ADDRESS_INFO_BAD_FLAGS;
-        case EAI_FAMILY:
-            return ErrorType::ADDRESS_INFO_FAMILY_NOT_SUPPORTED;
-        case EAI_NODATA:
-            return ErrorType::ADDRESS_INFO_NO_ADDRESS_DEFINED;
-        case EAI_NONAME:
-            return ErrorType::ADDRESS_INFO_NO_NAME;
-        case EAI_MEMORY:
-            return ErrorType::ADDRESS_INFO_OUT_OF_MEMORY;
-        case EAI_SERVICE:
-            return ErrorType::ADDRESS_INFO_SERVICE_NOT_AVAILABLE;
-        case EAI_SOCKTYPE:
-            return ErrorType::ADDRESS_INFO_SOCKET_TYPE_NOT_SUPPORTED;
-        case EAI_SYSTEM:
-            return ErrorType::ADDRESS_INFO_SYSTEM_ERROR;
-        case EAI_AGAIN:
-            return ErrorType::ADDRESS_INFO_TRY_AGAIN_LATER;
-        case EAI_ADDRFAMILY:
-            return ErrorType::ADDRESS_INFO_UNKNOWN_ADDRESS_FAMILY;
-        default:
-            return ErrorType::ADDRESS_INFO_PERMANENT_FAILURE;
+            // IPv4
+            ipv4 = reinterpret_cast<struct sockaddr_in *>(sa);
+            port = ipv4->sin_port;
+            return static_cast<void *>(&ipv4->sin_addr);
         }
-    }
 
-    /**
-     * @brief Convert socket::Family into standard family.
-     *
-     * @param[in] family  IP Family version taken from socket::Family
-     *
-     * @return Standard IP family version
-     */
-    int get_family(const ramrod::socket::Family family)
-    {
-        using namespace ramrod::socket;
-
-        switch (family)
-        {
-        case Family::IPV4:
-            return AF_INET;
-        case Family::IPV6:
-            return AF_INET6;
-        default:
-            return AF_UNSPEC;
-        }
-    }
-
-    /**
-     * @brief Convert standard family into socket::Family.
-     *
-     * @param[in] family  Standard IP Family version taken from socket
-     *
-     * @return socket::Family's IP family version
-     */
-    ramrod::socket::Family get_family(const int family)
-    {
-        using namespace ramrod::socket;
-
-        switch (family)
-        {
-        case AF_INET:
-            return Family::IPV4;
-        case AF_INET6:
-            return Family::IPV6;
-        default:
-            return Family::UNSPECIFIED;
-        }
-    }
-
-    /**
-     * @brief Convert socket::SocketType into standard socket type.
-     *
-     * @param[in] type  Socket type
-     *
-     * @return Standard socket type
-     */
-    int get_socket_type(const ramrod::socket::SocketType type)
-    {
-        using namespace ramrod::socket;
-
-        switch (type)
-        {
-        case SocketType::DATAGRAM:
-            return SOCK_DGRAM;
-        case SocketType::STREAM:
-            return SOCK_STREAM;
-        default:
-            return ERROR;
-        }
-    }
-
-    /**
-     * @brief Convert standard socket type into socket::SocketType.
-     *
-     * @param[in] type  Standard socket type taken from socket
-     *
-     * @return socket::Family's socket type
-     */
-    ramrod::socket::SocketType get_socket_type(const int type)
-    {
-        using namespace ramrod::socket;
-
-        switch (type)
-        {
-        case SOCK_DGRAM:
-            return SocketType::DATAGRAM;
-        case SOCK_STREAM:
-        default:
-            return SocketType::STREAM;
-        }
+        // IPv6
+        ipv6 = reinterpret_cast<struct sockaddr_in6 *>(sa);
+        port = ipv6->sin6_port;
+        return static_cast<void *>(&ipv6->sin6_addr);
     }
 
     /**
@@ -152,149 +57,151 @@ namespace
             ;
         errno = saved_errno;
     }
-}
+} // Unnamed namespace
 
 namespace ramrod::socket
 {
     Server::Server()
-        : Conversor{},
-          target_ip_{},
-          target_family_{},
-          target_port_{},
-          target_socket_type_{},
-          active_socket_{BAD_SOCKET},
-          last_error_{},
-          last_error_code_{}
+        : BasicSocket{},
+          Conversor{},
+          ErrorHandler{}
     {
+        // Creating a signal connection to reap all dead processes
+        struct sigaction signal_action;
+        signal_action.sa_handler = signal_children_handler;
+        ::sigemptyset(&signal_action.sa_mask);
+        signal_action.sa_flags = SA_RESTART;
+        if (::sigaction(SIGCHLD, &signal_action, nullptr) == ERROR)
+        {
+            set_error_code(ErrorType::DEAD_PROCESSES_REAPING_CONNECTION_FAILED, errno);
+        }
     }
 
     Server::~Server()
     {
-        disconnect();
+        close();
     }
 
-    bool Server::create(const std::string &ip,
-                        const std::uint16_t port,
-                        const Family ip_family,
-                        const SocketType socket_type)
+    ErrorType Server::open(const std::uint16_t port,
+                           const Family ip_family,
+                           const SocketType socket_type)
     {
-        if (active_socket_.fd != BAD_SOCKET)
+        if (_socket_params.fd != BAD_SOCKET)
         {
-            last_error_ = ErrorType::ALREADY_CONNECTED;
-            return false;
+            return ErrorType::ALREADY_OPEN;
+        }
+
+        static constexpr uint16_t EMPTY_PORT{};
+        if (port == EMPTY_PORT)
+        {
+            return ErrorType::PORT_CANNOT_BE_EMPTY;
+        }
+        const std::string service{std::to_string(port)};
+
+        return open(service, ip_family, socket_type);
+    }
+
+    ErrorType Server::open(const std::string &service,
+                           const Family ip_family,
+                           const SocketType socket_type)
+    {
+        if (_socket_params.fd != BAD_SOCKET)
+        {
+            return ErrorType::ALREADY_OPEN;
+        }
+
+        if (service.empty())
+        {
+            return ErrorType::SERVICE_CANNOT_BE_EMPTY;
         }
 
         int status{};
 
-        target_ip_ = ip;
-        target_port_ = port;
-        target_family_ = ip_family;
-        target_socket_type_ = socket_type;
+        _service = service;
+        _family = ip_family;
+        _socket_type = socket_type;
 
-        const int family{get_family(ip_family)};
-        const in_port_t network_port{::htons(port)};
+        const int family{convert_family(ip_family)};
 
         struct addrinfo hints{};
         // make sure the struct is empty
         std::memset(&hints, 0, sizeof(addrinfo));
         hints.ai_family = family;
-        hints.ai_socktype = get_socket_type(socket_type);
+        hints.ai_socktype = convert_socket_type(socket_type);
         // fill in my IP for me
         hints.ai_flags = AI_PASSIVE;
 
+        /// All found socket are stored in this list
         struct addrinfo *results{nullptr};
 
         /// Status indicating that socket's functions are working properly
         static constexpr int OK{};
-        const char *node{target_ip_.empty() ? nullptr : target_ip_.c_str()};
-        static constexpr uint16_t EMPTY_PORT{};
-        const char *service{port == EMPTY_PORT ? nullptr : std::to_string(port).c_str()};
-
         // Get all available devices that can be connected
-        if ((status = ::getaddrinfo(node, service, &hints, &results)) != OK)
+        if ((status = ::getaddrinfo(nullptr, service.c_str(), &hints, &results)) != OK)
         {
-            last_error_ = get_error_type(status);
-            last_error_code_ = status;
             if (results != nullptr)
                 ::freeaddrinfo(results);
-            return false;
+            return set_error_code(status);
         }
 
+        /// Pointer to client info
         struct addrinfo *client{nullptr};
         /// Socket's IP string
         char socket_ip_string[INET6_ADDRSTRLEN];
+        /// Last registered error (if there is one) used for for-loop function uses
+        /// continue rather than return
+        int last_error_code{};
 
         // Loop through all found devices
         for (client = results; client != nullptr; client = client->ai_next)
         {
             // Creating endpoint for communication
-            if ((active_socket_.fd = ::socket(client->ai_family,
+            if ((_socket_params.fd = ::socket(client->ai_family,
                                               client->ai_socktype,
                                               client->ai_protocol)) == ERROR)
             {
-                last_error_ = ErrorType::CREATE_SOCKET_ERROR;
-                last_error_code_ = errno;
-                continue;
-            }
-
-            void *addr;
-            struct sockaddr_in *ipv4;
-            struct sockaddr_in6 *ipv6;
-
-            // get the pointer to the address itself,
-            // different fields in IPv4 and IPv6:
-            if (client->ai_family == AF_INET)
-            {
-                // IPv4
-                ipv4 = reinterpret_cast<struct sockaddr_in *>(client->ai_addr);
-                addr = &ipv4->sin_addr;
-                active_socket_.port = ipv4->sin_port;
-            }
-            else
-            {
-                // IPv6
-                ipv6 = reinterpret_cast<struct sockaddr_in6 *>(client->ai_addr);
-                addr = &ipv6->sin6_addr;
-                active_socket_.port = ipv6->sin6_port;
-            }
-
-            // convert the IP to a string
-            if (::inet_ntop(client->ai_family,
-                            addr,
-                            socket_ip_string,
-                            sizeof(socket_ip_string)) == nullptr)
-            {
-                last_error_ = ErrorType::IP_CONVERSION_FAILED;
-                last_error_code_ = errno;
-                ::close(active_socket_.fd);
+                last_error_code = errno;
+                set_error_code(ErrorType::CREATE_SOCKET_ERROR, errno);
                 continue;
             }
 
             // Lose the pesky "Address already in use" error message
-            if (::setsockopt(active_socket_.fd,
+            if (::setsockopt(_socket_params.fd,
                              SOL_SOCKET,
                              SO_REUSEADDR,
                              &status,
                              sizeof(int)) == ERROR)
             {
-                last_error_ = ErrorType::SET_SOCKET_OPTION_ERROR;
-                last_error_code_ = errno;
-                ::close(active_socket_.fd);
+                last_error_code = errno;
+                set_error_code(ErrorType::SET_SOCKET_OPTION_ERROR, errno);
+                ::close(_socket_params.fd);
+                continue;
+            }
+
+            // convert the IP to a string
+            if (::inet_ntop(client->ai_family,
+                            get_in_address(client->ai_addr, _socket_params.port),
+                            socket_ip_string,
+                            sizeof(socket_ip_string)) == nullptr)
+            {
+                last_error_code = errno;
+                set_error_code(ErrorType::IP_CONVERSION_FAILED, errno);
+                ::close(_socket_params.fd);
                 continue;
             }
 
             // Binding the socket to the port
-            if (::bind(active_socket_.fd, client->ai_addr, client->ai_addrlen) == ERROR)
+            if (::bind(_socket_params.fd, client->ai_addr, client->ai_addrlen) == ERROR)
             {
-                last_error_ = ErrorType::BIND_SOCKET_ERROR;
-                last_error_code_ = errno;
-                ::close(active_socket_.fd);
+                last_error_code = errno;
+                set_error_code(ErrorType::BIND_SOCKET_ERROR, errno);
+                ::close(_socket_params.fd);
                 continue;
             }
 
-            active_socket_.ip = socket_ip_string;
-            active_socket_.family = get_family(client->ai_family);
-            active_socket_.type = get_socket_type(client->ai_socktype);
+            _socket_params.ip = socket_ip_string;
+            _socket_params.family = convert_family(client->ai_family);
+            _socket_params.type = convert_socket_type(client->ai_socktype);
 
             break;
         }
@@ -305,135 +212,50 @@ namespace ramrod::socket
 
         if (client == nullptr)
         {
-            last_error_ = ErrorType::NO_SOCKET_AVAILABLE;
-            active_socket_ = {};
-            active_socket_.fd = BAD_SOCKET;
-            return false;
+            ::close(_socket_params.fd);
+            _socket_params = {};
+            _socket_params.fd = BAD_SOCKET;
+            return set_error_code(ErrorType::NO_SOCKET_AVAILABLE, last_error_code);
         }
 
-        // Creating a signal connection to reap all dead processes
-        struct sigaction signal_action;
-        signal_action.sa_handler = signal_children_handler;
-        ::sigemptyset(&signal_action.sa_mask);
-        signal_action.sa_flags = SA_RESTART;
-        if (::sigaction(SIGCHLD, &signal_action, nullptr) == ERROR)
+        if (_socket_params.fd == BAD_SOCKET)
         {
-            last_error_ = ErrorType::DEAD_PROCESSES_REAPING_CONNECTION_FAILED;
-            last_error_code_ = errno;
+            return set_error_code(ErrorType::NO_SOCKET_AVAILABLE, last_error_code);
         }
 
-        return active_socket_.fd != BAD_SOCKET;
+        return ErrorType::SUCCESS;
     }
 
-    bool Server::destroy()
+    ErrorType Server::close()
     {
-        bool ok{true};
+        ErrorType status{ErrorType::SUCCESS};
 
-        if (active_socket_.fd != BAD_SOCKET)
+        if (_socket_params.fd != BAD_SOCKET)
         {
-            if (::close(active_socket_.fd) == ERROR)
+            if (::close(_socket_params.fd) == ERROR)
             {
-                last_error_ = ErrorType::CLOSE_ERROR;
-                last_error_code_ = errno;
-                ok = false;
+                status = set_error_code(ErrorType::CLOSE_ERROR, errno);
             }
-            active_socket_ = {};
-            active_socket_.fd = BAD_SOCKET;
+            _socket_params = {};
+            _socket_params.fd = BAD_SOCKET;
         }
 
-        return ok;
+        return status;
     }
 
-    const std::string &Server::ip()
+    bool Server::is_open()
     {
-        return active_socket_.ip;
+        return _socket_params.fd != BAD_SOCKET;
     }
 
-    Family Server::ip_family()
+    ErrorType Server::reopen()
     {
-        return active_socket_.family;
-    }
+        close();
 
-    bool Server::is_connected()
-    {
-        // TODO: maybe check if there are connections
-        return active_socket_.fd != BAD_SOCKET;
-    }
-
-    ErrorType Server::last_error()
-    {
-        return last_error_;
-    }
-
-    const char *Server::last_error_detail()
-    {
-        switch (last_error_)
+        if (!is_initialized())
         {
-        case ErrorType::SUCCESS:
-            static constexpr char SUCCESS_MSG[]{"No error encountered"};
-            return SUCCESS_MSG;
-        case ErrorType::ALREADY_CONNECTED:
-            static constexpr char ALREADY_CONNECTED_MSG[]{"There is already an active connection"};
-            return ALREADY_CONNECTED_MSG;
-        case ErrorType::NO_SOCKET_AVAILABLE:
-            static constexpr char NO_SOCKET_AVAILABLE_MSG[]{
-                "No socket is available with given parameters"};
-            return NO_SOCKET_AVAILABLE_MSG;
-        case ErrorType::ADDRESS_INFO_BAD_FLAGS:
-        case ErrorType::ADDRESS_INFO_FAMILY_NOT_SUPPORTED:
-        case ErrorType::ADDRESS_INFO_NO_ADDRESS_DEFINED:
-        case ErrorType::ADDRESS_INFO_NO_NAME:
-        case ErrorType::ADDRESS_INFO_OUT_OF_MEMORY:
-        case ErrorType::ADDRESS_INFO_PERMANENT_FAILURE:
-        case ErrorType::ADDRESS_INFO_SERVICE_NOT_AVAILABLE:
-        case ErrorType::ADDRESS_INFO_SOCKET_TYPE_NOT_SUPPORTED:
-        case ErrorType::ADDRESS_INFO_TRY_AGAIN_LATER:
-        case ErrorType::ADDRESS_INFO_UNKNOWN_ADDRESS_FAMILY:
-            return ::gai_strerror(last_error_code_);
-        case ErrorType::ADDRESS_INFO_SYSTEM_ERROR:
-        case ErrorType::BIND_SOCKET_ERROR:
-        case ErrorType::CLOSE_ERROR:
-        case ErrorType::CREATE_SOCKET_ERROR:
-        case ErrorType::DEAD_PROCESSES_REAPING_CONNECTION_FAILED:
-        case ErrorType::IP_CONVERSION_FAILED:
-        case ErrorType::SET_SOCKET_OPTION_ERROR:
-        case ErrorType::SYSTEM_ERROR:
-            return std::strerror(last_error_code_);
-        default:
-            static constexpr char UNKNOWN_ERROR_MSG[]{"Unknown error"};
-            return UNKNOWN_ERROR_MSG;
+            return ErrorType::OPEN_HAS_NOT_BEEN_CALLED_YET;
         }
-    }
-
-    std::uint16_t Server::port()
-    {
-        return active_socket_.port;
-    }
-
-    ssize_t Server::receive(void *buffer, const std::size_t size, const int flags)
-    {
-    }
-
-    bool Server::recreate()
-    {
-        destroy();
-        static constexpr std::uint16_t EMPTY_PORT{};
-        if (target_ip_.empty() &&
-            (target_family_ == Family::UNSPECIFIED) &&
-            (target_port_ == EMPTY_PORT) &&
-            (target_socket_type_ == SocketType::STREAM))
-        {
-            return false;
-        }
-        return create(target_ip_, target_port_, target_family_, target_socket_type_);
-    }
-
-    ssize_t Server::send(const void *buffer, const std::size_t size, const int flags)
-    {
-    }
-
-    SocketType Server::socket_type()
-    {
-        return active_socket_.type;
+        return open(_service, _family, _socket_type);
     }
 } // namespace: ramrod::socket
