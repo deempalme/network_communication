@@ -3,7 +3,8 @@
 
 #include "ramrod/socket/Enumerators.hpp" // for ErrorType
 
-#include <array> // for array
+#include <array>       // for array
+#include <sys/types.h> // for ssize_t
 
 namespace ramrod::socket
 {
@@ -35,6 +36,89 @@ namespace ramrod::socket
         const char *get_error_detail(const ErrorType error_type);
 
     protected:
+        /**
+         * @brief Fill a connection status from \p recv/from() set error.
+         *
+         * @param[in] error_code       errno set by \p recv/from()
+         * @param[in] received_length  Returned value from \p recv/from()
+         * @param[out] status          Status that will be filled based on \p error_code,
+         *                             ignored if is nullptr
+         *
+         * @return True if connection should be closed since error means it is
+         *         already disconnected
+         */
+        bool fill_receive_error(const int error_code,
+                                const ssize_t received_length,
+                                ReceiveStatus *status);
+        /**
+         * @brief Fill a connection status from \p send/to() set error.
+         *
+         * @param[in] error_code   errno set by \p send/to()
+         * @param[in] sent_length  Returned value from \p send/to()
+         * @param[out] status      Status that will be filled based on \p error_code,
+         *                         ignored if is nullptr
+         *
+         * @return True if connection should be closed since error means it is
+         *         already disconnected
+         */
+        bool fill_send_error(const int error_code,
+                             const ssize_t sent_length,
+                             SendStatus *status);
+
+        /**
+         * @brief Get a connection status from \p getaddrinfo() returned error.
+         *
+         * @param[in] error_code  Error code returned by \p getaddrinfo()
+         *
+         * @return An equivalent ConnectStatus value for \p error_code
+         */
+        ConnectStatus get_addr_info_error(const int error_code);
+
+        /**
+         * @brief Get a connection status from \p close() errno value.
+         *
+         * @param[in] error_code  errno value set by \p close()
+         *
+         * @return An equivalent ConnectStatus value for \p error_code
+         */
+        ConnectStatus get_close_error(const int error_code);
+
+        /**
+         * @brief Get a connection status from \p connect() errno value.
+         *
+         * @param[in] error_code  errno value set by \p connect()
+         *
+         * @return An equivalent ConnectStatus value for \p error_code
+         */
+        ConnectStatus get_connect_error(const int error_code);
+
+        /**
+         * @brief Get a connection status from \p inet_ntop() errno value.
+         *
+         * @param[in] error_code  errno value set by \p inet_ntop()
+         *
+         * @return An equivalent ConnectStatus value for \p error_code
+         */
+        ConnectStatus get_inet_ntop_error(const int error_code);
+
+        /**
+         * @brief Get a connection status from \p socket() errno value.
+         *
+         * @param[in] error_code  errno value set by \p socket()
+         *
+         * @return An equivalent ConnectStatus value for \p error_code
+         */
+        ConnectStatus get_socket_error(const int error_code);
+
+        /**
+         * @brief Get a connection status from \p setsockopt() errno value.
+         *
+         * @param[in] error_code  errno value set by \p setsockopt()
+         *
+         * @return An equivalent ConnectStatus value for \p setsockopt
+         */
+        ConnectStatus get_socket_option_error(const int error_code);
+
         /**
          * @brief Set the error code for a defined ErrorType.
          *

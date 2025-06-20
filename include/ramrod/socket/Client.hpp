@@ -88,10 +88,12 @@ namespace ramrod::socket
         ssize_t send(const void *buffer, const std::size_t size, SendStatus *status = nullptr);
 
     private:
-        /// @brief Pointer to server address in socket format
-        void *server_address_;
+        /// @brief Server address used to verify that received UDP data comes from server
+        void *server_in_address_;
+        /// @brief Real server address used to directly send UDP data to server
+        void *server_real_address_;
         /// @brief Size of \p server_address_
-        std::size_t server_address_length_;
+        unsigned int server_address_length_;
     };
 } // namespace: ramrod::socket
 

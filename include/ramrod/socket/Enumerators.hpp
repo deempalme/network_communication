@@ -10,14 +10,59 @@ namespace ramrod::socket
     {
         /// @brief No error encountered
         SUCCESS = 0u,
+        /// @brief Local address is already in use
+        ADDRESS_ALREADY_IN_USE,
+        /// @brief The bound address was found that all port numbers in range are currently in sue
+        ADDRESS_NOT_AVAILABLE,
+        /// @brief Server socket is already open, only one is allowed per instance
+        ALREADY_OPEN,
         /// @brief It is necessary to call \p connect() before at least once
         CONNECTION_HAS_NOT_BEEN_CALLED_YET,
+        /// @brief The socket is nonblocking and the connection cannot be completed immediately
+        CONNECTION_IN_PROGRESS,
+        /// @brief No one found listening on the remote address
+        CONNECTION_REFUSED,
         /// @brief Event has been interrupted by a signal
         INTERRUPTED_BY_A_SIGNAL,
+        /// @brief The specified network host does not have any network addresses
+        ///        in the requested address family. Or the node or service is not known
+        INVALID_ADDRESS,
         /// @brief An I/O error occurred.
         IO_ERROR,
+        /// @brief IP address and port cannot be empty at the same time
+        IP_AND_PORT_CANNOT_BE_EMPTY,
+        /// @brief IP address and service cannot be empty at the same time
+        IP_AND_SERVICE_CANNOT_BE_EMPTY,
+        /// @brief The system-wide limit on the total number of open connections has
+        ///        been reached.
+        MAXIMUM_CONNECTION_COUNT_REACHED,
+        /// @brief Network is unreachable
+        NETWORK_UNREACHABLE,
+        /// @brief Permission to create connection with specified parameters was denied
+        NO_ACCESS,
+        /// @brief The specified network host exists, but does not have any network
+        ///        addresses defined.
+        NOT_OPEN,
         /// @brief Connection not open, or already disconnected
         NOT_CONNECTED,
+        /// @brief Out of memory
+        OUT_OF_MEMORY,
+        /// @brief The name server returned a permanent failure indication
+        PERMANENT_FAILURE,
+        /// @brief Permission denied to access socket file
+        PERMISSION_DENIED,
+        /// @brief The protocol type or the specified protocol is not supported within
+        ///        this domain/address
+        PROTOCOL_NOT_SUPPORTED_BY_ADDRESS,
+        /// @brief Other system error; errno is set to indicate the error
+        SYSTEM_ERROR,
+        /// @brief Timeout while attempting connection. The server may be too busy
+        ///        to accept new connections
+        TIMED_OUT,
+        /// @brief The name server returned a temporary failure indication, or there
+        ///        are insufficient entries in the routing cache, or a previous connection
+        ///        attempt has not yet been completed. Try again later
+        TRY_AGAIN_LATER,
         /// @brief Unknown error
         UNKNOWN_ERROR,
     };

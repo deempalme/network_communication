@@ -3,6 +3,7 @@
 
 #include "ramrod/socket/Enumerators.hpp" // for ErrorType, Family, SocketType
 
+#include <array>   // for array
 #include <cstdint> // for uint16_t
 #include <string>  // for string
 
@@ -35,7 +36,13 @@ namespace ramrod::socket
          */
         std::uint16_t port();
 
-        // TODO: fill
+        /**
+         * @brief Shutdown receive, send or both communications from a connection.
+         *
+         * @param[in] type  Indicates which action should be shutdown: RECEIVE, SEND, or ALL
+         *
+         * @return Status of the shutdown
+         */
         ConnectStatus shutdown(const ShutdownType type = ShutdownType::RECEIVE);
 
         /**
@@ -46,6 +53,19 @@ namespace ramrod::socket
         SocketType socket_type();
 
     protected:
+        /**
+         * @brief Check if two sockaddr are equal.
+         *
+         * Only IPv4 and IPv6 are supported, if there is a not supported family then this
+         * will return false
+         *
+         * @param[in] a  First address to compare
+         * @param[in] b  Second address that will be compared
+         *
+         * @return True if bot addresses are the same, false otherwise
+         */
+        static bool are_addresses_equal(const void *a, const void *b);
+
         /**
          * @brief Convert socket::Family into standard family.
          *

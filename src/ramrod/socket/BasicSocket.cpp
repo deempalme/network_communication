@@ -1,5 +1,7 @@
 #include "ramrod/socket/BasicSocket.hpp"
 
+#include <algorithm>    // for equal
+#include <netdb.h>      // for INET6_ADDRSTRLEN
 #include <sys/socket.h> // for AF_INET, AF_INET6, ...
 
 namespace
@@ -36,12 +38,80 @@ namespace ramrod::socket
         return _socket_params.port;
     }
 
+    ConnectStatus BasicSocket::shutdown(const ShutdownType type)
+    {
+        if (_socket_params.fd == BAD_SOCKET)
+        {
+            return ConnectStatus::NOT_CONNECTED;
+        }
+
+        int how_to_shutdown{};
+        switch (type)
+        {
+        case ShutdownType::RECEIVE:
+            how_to_shutdown = SHUT_RD;
+            break;
+        case ShutdownType::SEND:
+            how_to_shutdown = SHUT_WR;
+            break;
+        default:
+            how_to_shutdown = SHUT_RDWR;
+            break;
+        }
+
+        if (::shutdown(_socket_params.fd, how_to_shutdown) == ERROR)
+        {
+            switch (errno)
+            {
+            case EBADF:
+            case ENOTCONN:
+            case ENOTSOCK:
+                return ConnectStatus::NOT_CONNECTED;
+            case EINVAL:
+            default:
+                return ConnectStatus::UNKNOWN_ERROR;
+            }
+        }
+
+        return ConnectStatus::SUCCESS;
+    }
+
     SocketType BasicSocket::socket_type()
     {
         return _socket_params.type;
     }
 
     // ::::::::::::::::::::::::::::::::::: PROTECTED FUNCTIONS :::::::::::::::::::::::::::::::::::
+
+    bool BasicSocket::are_addresses_equal(const void *a, const void *b)
+    {
+        const struct sockaddr *a_ptr{static_cast<const struct sockaddr *>(a)};
+
+        // Checking if they have the same type
+        if (a_ptr->sa_family != static_cast<const struct sockaddr *>(b)->sa_family)
+            return false;
+
+        if (a_ptr->sa_family == AF_INET)
+        {
+            const struct sockaddr_in *a_in{static_cast<const struct sockaddr_in *>(a)};
+            const struct sockaddr_in *b_in{static_cast<const struct sockaddr_in *>(b)};
+            // Checking that both address and port are equals
+            return (a_in->sin_addr.s_addr == b_in->sin_addr.s_addr) &&
+                   (a_in->sin_port == b_in->sin_port);
+        }
+        else if (a_ptr->sa_family == AF_INET6)
+        {
+            const struct sockaddr_in6 *a_in6{static_cast<const struct sockaddr_in6 *>(a)};
+            const struct sockaddr_in6 *b_in6{static_cast<const struct sockaddr_in6 *>(b)};
+            // Checking that both address (byte by byte) and port are equals
+            return std::equal(std::begin(a_in6->sin6_addr.__in6_u.__u6_addr32),
+                              std::end(a_in6->sin6_addr.__in6_u.__u6_addr32),
+                              std::begin(b_in6->sin6_addr.__in6_u.__u6_addr32)) &&
+                   (a_in6->sin6_port == b_in6->sin6_port);
+        }
+        // Other families are not supported
+        return false;
+    }
 
     int BasicSocket::convert_family(const ramrod::socket::Family family)
     {
