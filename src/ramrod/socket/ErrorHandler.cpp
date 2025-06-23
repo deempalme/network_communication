@@ -1,10 +1,7 @@
 #include "ramrod/socket/ErrorHandler.hpp"
 
-#include <cerrno>      // for errno
-#include <cstdint>     // for size_t
-#include <cstring>     // for stderror
-#include <netdb.h>     // for EAI_... codes
-#include <type_traits> // for is_
+#include <cerrno>  // for EBADF, EINVAL, ENOTSOCK, ENOMEM, EINTR, ENOBUFS
+#include <netdb.h> // for EAI_ADDRFAMILY, EAI_AGAIN, EAI_BADFLAGS, EAI_FAIL
 
 namespace
 {
@@ -16,7 +13,6 @@ namespace
 
 namespace ramrod::socket
 {
-    template <>
     const char *get_status_detail(const ConnectStatus status)
     {
         switch (status)
@@ -142,7 +138,6 @@ namespace ramrod::socket
         }
     }
 
-    template <>
     const char *get_status_detail(const ReceiveStatus status)
     {
         switch (status)
@@ -179,7 +174,6 @@ namespace ramrod::socket
         }
     }
 
-    template <>
     const char *get_status_detail(const SendStatus status)
     {
         switch (status)
@@ -234,37 +228,7 @@ namespace ramrod::socket
         }
     }
 
-    template <typename Enum>
-    const char *get_status_detail(const Enum status)
-    {
-        static_assert(std::is_same<ConnectStatus, Enum>::value ||
-                          std::is_same<ReceiveStatus, Enum>::value ||
-                          std::is_same<SendStatus, Enum>::value,
-                      "Invalid status' enumerator");
-        return get_status_detail(status);
-    }
-
     // ::::::::::::::::::::::::::::::::::: PROTECTED FUNCTIONS :::::::::::::::::::::::::::::::::::
-
-    ConnectStatus ErrorHandler::convert_to_connect_status(const ReceiveStatus status)
-    {
-        switch (status)
-        {
-        case ReceiveStatus::TRY_RECEIVE_AGAIN:
-            return ConnectStatus::TRY_AGAIN_LATER;
-        case ReceiveStatus::NOT_CONNECTED:
-            return ConnectStatus::NOT_CONNECTED;
-        case ReceiveStatus::INTERRUPTED_BY_A_SIGNAL:
-            return ConnectStatus::INTERRUPTED_BY_A_SIGNAL;
-        case ReceiveStatus::INVALID_ARGUMENT:
-            return ConnectStatus::INVALID_ADDRESS;
-        case ReceiveStatus::OUT_OF_MEMORY:
-            return ConnectStatus::OUT_OF_MEMORY;
-        case ReceiveStatus::BUFFER_POINTER_FAULT:
-        default:
-            return ConnectStatus::UNKNOWN_ERROR;
-        }
-    }
 
     bool ErrorHandler::fill_receive_error(const int error_code,
                                           const ssize_t received_length,

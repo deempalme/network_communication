@@ -154,14 +154,6 @@ namespace ramrod::socket
         /// @brief  Further transmissions will be disallowed
         SEND,
     };
-
-    enum class SocketType : std::uint8_t
-    {
-        /// @brief (TCP) Sequenced, reliable, connection-based byte streams
-        STREAM,
-        /// @brief (UDP) Connectionless, unreliable datagrams of fixed maximum length
-        DATAGRAM,
-    };
 } // namespace ramrod::socket
 
 #endif // RAMROD_SOCKET_ENUMERATORS_HPP

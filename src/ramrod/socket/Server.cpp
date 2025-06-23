@@ -1,13 +1,13 @@
 #include "ramrod/socket/Server.hpp"
 
-#include <algorithm> // for min
-#include <arpa/inet.h>
+#include <algorithm>    // for min
+#include <arpa/inet.h>  // for inet_ntop
 #include <cerrno>       // for errno
 #include <cstring>      // for memset
 #include <limits>       // for numeric_limits
-#include <netdb.h>      // for addrinfo, freeaddrinfo, gai_st...
-#include <signal.h>     // for sigaction, sigemptyset, SA_RES...
-#include <sys/socket.h> // for accept, listen, bind, ...
+#include <netdb.h>      // for addrinfo, freeaddrinfo, getaddrinfo, AI_PASSIVE
+#include <netinet/in.h> // for INET6_ADDRSTRLEN, sockaddr_in, sockaddr_in6
+#include <sys/socket.h> // for sockaddr, accept, bind, listen, setsockopt
 #include <unistd.h>     // for close
 
 namespace
@@ -65,7 +65,6 @@ namespace ramrod::socket
 
     ConnectStatus Server::open(const std::uint16_t port,
                                const Family ip_family,
-                               const SocketType socket_type,
                                const std::uint32_t queue)
     {
         if (_socket_params.fd != BAD_SOCKET)
@@ -81,12 +80,11 @@ namespace ramrod::socket
         }
         const std::string service{port_is_empty ? std::string{} : std::to_string(port)};
 
-        return open(service, ip_family, socket_type, queue);
+        return open(service, ip_family, queue);
     }
 
     ConnectStatus Server::open(const std::string &service,
                                const Family ip_family,
-                               const SocketType socket_type,
                                const std::uint32_t queue)
     {
         if (_socket_params.fd != BAD_SOCKET)
@@ -103,7 +101,6 @@ namespace ramrod::socket
 
         _service = service;
         _family = ip_family;
-        _socket_type = socket_type;
         /// Max integer value used to cap \p max_queue_count_
         static constexpr std::uint32_t MAX_INT_VALUE{
             static_cast<std::uint32_t>(std::numeric_limits<int>::max())};
@@ -115,7 +112,7 @@ namespace ramrod::socket
         // make sure the struct is empty
         std::memset(&hints, 0, sizeof(addrinfo));
         hints.ai_family = family;
-        hints.ai_socktype = convert_socket_type(socket_type);
+        hints.ai_socktype = SOCK_STREAM;
         // fill in my IP for me
         hints.ai_flags = AI_PASSIVE;
 
@@ -185,7 +182,6 @@ namespace ramrod::socket
 
             _socket_params.ip = ip_string;
             _socket_params.family = convert_family(client->ai_family);
-            _socket_params.type = convert_socket_type(client->ai_socktype);
 
             break;
         }
@@ -202,11 +198,8 @@ namespace ramrod::socket
             return last_error;
         }
 
-        if ((_socket_params.fd == BAD_SOCKET) || // Not connected
-            (socket_type != SocketType::STREAM)) // No need to listen if is datagram
-        {
+        if (_socket_params.fd == BAD_SOCKET)
             return last_error;
-        }
 
         if (::listen(_socket_params.fd, max_queue_count_) == ERROR)
         {
@@ -245,7 +238,7 @@ namespace ramrod::socket
         if (_socket_params.fd == BAD_SOCKET)
         {
             if (status != nullptr)
-                *status == ConnectStatus::NOT_CONNECTED;
+                *status = ConnectStatus::NOT_CONNECTED;
             return accepted_client;
         }
 
@@ -261,39 +254,16 @@ namespace ramrod::socket
         /// File descriptor from accepted client
         int new_fd{BAD_SOCKET};
 
-        if (_socket_params.type == SocketType::DATAGRAM)
+        if ((new_fd = ::accept(_socket_params.fd,
+                               accepted_client_addr_ptr,
+                               &address_length)) == BAD_SOCKET)
         {
-            // Waiting for the first message to arrive from a client
-            ssize_t received_size{};
-            received_size = ::recvfrom(_socket_params.fd,
-                                       static_cast<void *>(&buffer_string),
-                                       sizeof(buffer_string),
-                                       MSG_PEEK,
-                                       accepted_client_addr_ptr,
-                                       &address_length);
-            ReceiveStatus receive_status{};
-            fill_receive_error(errno, received_size, &receive_status);
-
-            if (receive_status != ReceiveStatus::SUCCESS)
-            {
-                if (status != nullptr)
-                    *status = convert_to_connect_status(receive_status);
-                return accepted_client;
-            }
-        }
-        else if (_socket_params.type == SocketType::STREAM)
-        {
-            if ((new_fd = ::accept(_socket_params.fd,
-                                   accepted_client_addr_ptr,
-                                   &address_length)) == BAD_SOCKET)
-            {
-                const ConnectStatus accept_status{get_accept_error(errno)};
-                if (accept_status == ConnectStatus::NOT_CONNECTED)
-                    close();
-                if (status != nullptr)
-                    *status == accept_status;
-                return accepted_client;
-            }
+            const ConnectStatus accept_status{get_accept_error(errno)};
+            if (accept_status == ConnectStatus::NOT_CONNECTED)
+                close();
+            if (status != nullptr)
+                *status = accept_status;
+            return accepted_client;
         }
 
         /// Client's port
@@ -308,23 +278,21 @@ namespace ramrod::socket
                         INET6_ADDRSTRLEN) == nullptr)
         {
             if (status != nullptr)
-                *status == get_inet_ntop_error(errno);
+                *status = get_inet_ntop_error(errno);
             ::close(new_fd);
             return accepted_client;
         }
 
         if (status != nullptr)
-            *status == ConnectStatus::SUCCESS;
+            *status = ConnectStatus::SUCCESS;
 
         const std::string accepted_ip{buffer_string};
         const Family accepted_family{convert_family(client_addr_family)};
-        const SocketType accepted_socket_type{_socket_params.type};
 
         accepted_client = std::make_shared<ChildClient>(ChildClient{new_fd,
                                                                     accepted_ip,
                                                                     accepted_port,
-                                                                    accepted_family,
-                                                                    accepted_socket_type});
+                                                                    accepted_family});
 
         return accepted_client;
     }
@@ -337,6 +305,6 @@ namespace ramrod::socket
         {
             return ConnectStatus::OPEN_HAS_NOT_BEEN_CALLED_YET;
         }
-        return open(_service, _family, _socket_type, max_queue_count_);
+        return open(_service, _family, static_cast<std::uint32_t>(max_queue_count_));
     }
 } // namespace: ramrod::socket

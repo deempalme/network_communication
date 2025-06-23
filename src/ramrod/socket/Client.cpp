@@ -1,14 +1,12 @@
 #include "ramrod/socket/Client.hpp"
 
-#include <arpa/inet.h>
+#include <arpa/inet.h>  // for inet_ntop
 #include <cerrno>       // for errno
-#include <cstdlib>      // for realloc
-#include <cstring>      // for memset
-#include <netdb.h>      // for addrinfo, freeaddrinfo, gai_st...
-#include <signal.h>     // for sigaction, sigemptyset, SA_RES...
-#include <sys/socket.h> // for recv, send, MSG_NOSIGNAL, accept
+#include <cstring>      // for memset, size_t
+#include <netdb.h>      // for addrinfo, freeaddrinfo, getaddrinfo, AI_PASSIVE
+#include <netinet/in.h> // for sockaddr_in, sockaddr_in6, INET6_ADDRSTRLEN
+#include <sys/socket.h> // for connect, recv, send, setsockopt, socket, AF_...
 #include <sys/types.h>  // for ssize_t
-#include <sys/wait.h>   // for waitpid, WNOHANG
 #include <unistd.h>     // for close
 
 namespace
@@ -19,48 +17,6 @@ namespace
     static constexpr int ERROR{-1};
     /// @brief Value that indicates an error when receiving or sending data
     static constexpr ssize_t TRANSFER_ERROR{-1l};
-
-    /**
-     * @brief Fill server address from an incoming sockaddr.
-     *
-     * @param[out] server_in_address    Mermory will be allocated for this only
-     * @param[out] server_real_address  This will be filled with the real server address
-     * @param[in] socket_type           Type of socket used in this client
-     * @param[in] in_address            Incoming server address in sockaddr format
-     * @param[in] in_length             Length of \p in_address in bytes
-     *
-     * @return Size of server address in bytes
-     */
-    socklen_t fill_server_address(void *server_in_address,
-                                  void *server_real_address,
-                                  const ramrod::socket::SocketType socket_type,
-                                  sockaddr *in_address,
-                                  const socklen_t in_length)
-    {
-        if (socket_type == ramrod::socket::SocketType::STREAM)
-        {
-            // No need to save server address
-            if (server_in_address != nullptr)
-            {
-                std::free(server_in_address);
-                server_in_address = nullptr;
-            }
-            if (server_real_address != nullptr)
-            {
-                std::free(server_real_address);
-                server_real_address = nullptr;
-            }
-            static constexpr socklen_t EMPTY{};
-            return EMPTY;
-        }
-
-        const std::size_t address_length{static_cast<std::size_t>(in_length)};
-        std::realloc(server_real_address, address_length);
-        std::memcpy(server_real_address, static_cast<void *>(in_address), address_length);
-        // No need to copy contents into server_in_address (that should be done in receive())
-        std::realloc(server_in_address, address_length);
-        return in_length;
-    }
 
     /**
      * @brief Get IPv4 or IPv6 address from \b sockaddr.
@@ -97,10 +53,7 @@ namespace ramrod::socket
     Client::Client()
         : BasicSocket{},
           Conversor{},
-          ErrorHandler{},
-          server_in_address_{nullptr},
-          server_real_address_{nullptr},
-          server_address_length_{}
+          ErrorHandler{}
     {
     }
 
@@ -111,8 +64,7 @@ namespace ramrod::socket
 
     ConnectStatus Client::connect(const std::string &ip,
                                   const std::uint16_t port,
-                                  const Family ip_family,
-                                  const SocketType socket_type)
+                                  const Family ip_family)
     {
         if (_socket_params.fd != BAD_SOCKET)
             return ConnectStatus::ALREADY_OPEN;
@@ -124,13 +76,12 @@ namespace ramrod::socket
 
         const std::string service{port_is_empty ? std::string{} : std::to_string(port)};
 
-        return connect(ip, service, ip_family, socket_type);
+        return connect(ip, service, ip_family);
     }
 
     ConnectStatus Client::connect(const std::string &ip,
                                   const std::string &service,
-                                  const Family ip_family,
-                                  const SocketType socket_type)
+                                  const Family ip_family)
     {
         if (_socket_params.fd != BAD_SOCKET)
             return ConnectStatus::ALREADY_OPEN;
@@ -143,7 +94,6 @@ namespace ramrod::socket
         _ip = ip;
         _service = service;
         _family = ip_family;
-        _socket_type = socket_type;
 
         const int family{convert_family(ip_family)};
 
@@ -151,7 +101,7 @@ namespace ramrod::socket
         // make sure the struct is empty
         std::memset(&hints, 0, sizeof(addrinfo));
         hints.ai_family = family;
-        hints.ai_socktype = convert_socket_type(socket_type);
+        hints.ai_socktype = SOCK_STREAM;
         // fill in my IP for me
         hints.ai_flags = AI_PASSIVE;
 
@@ -214,28 +164,16 @@ namespace ramrod::socket
                 continue;
             }
 
-            // Only TCP allows connections
-            if (socket_type == SocketType::STREAM)
+            // Connecting to server
+            if (::connect(_socket_params.fd, server->ai_addr, server->ai_addrlen) == ERROR)
             {
-                // Connecting to server
-                if (::connect(_socket_params.fd, server->ai_addr, server->ai_addrlen) == ERROR)
-                {
-                    last_error = get_connect_error(errno);
-                    ::close(_socket_params.fd);
-                    continue;
-                }
+                last_error = get_connect_error(errno);
+                ::close(_socket_params.fd);
+                continue;
             }
 
             _socket_params.ip = string_buffer;
             _socket_params.family = convert_family(server->ai_family);
-            _socket_params.type = convert_socket_type(server->ai_socktype);
-
-            // Filling server info for UDP connection
-            server_address_length_ = fill_server_address(server_in_address_,
-                                                         server_real_address_,
-                                                         _socket_params.type,
-                                                         server->ai_addr,
-                                                         server->ai_addrlen);
 
             break;
         }
@@ -264,18 +202,6 @@ namespace ramrod::socket
 
         if (_socket_params.fd != BAD_SOCKET)
         {
-            // Removing current server address info since it will not be needed anymore
-            if (server_in_address_ != nullptr)
-            {
-                std::free(server_in_address_);
-                server_in_address_ = nullptr;
-            }
-            if (server_real_address_ != nullptr)
-            {
-                std::free(server_real_address_);
-                server_real_address_ = nullptr;
-            }
-
             if (::close(_socket_params.fd) == ERROR)
             {
                 status = get_close_error(errno);
@@ -307,36 +233,8 @@ namespace ramrod::socket
         /// No receive flags
         static constexpr int NO_FLAGS{};
 
-        if (_socket_params.type == SocketType::STREAM)
-        {
-            // Receiving over TCP
-            total_received == ::recv(_socket_params.fd, buffer, size, NO_FLAGS);
-        }
-        else
-        {
-            /// Address' size that should be expected from received data
-            const socklen_t expected_server_address_length{server_address_length_};
-            /// True address' size that was received
-            socklen_t server_in_length{};
-
-        receive_again:
-            // Restoring size each time recvfrom is called
-            server_in_length = expected_server_address_length;
-
-            // Receiving over UDP
-            total_received == ::recvfrom(_socket_params.fd,
-                                         buffer,
-                                         size,
-                                         NO_FLAGS,
-                                         static_cast<struct sockaddr *>(server_in_address_),
-                                         &server_in_length);
-
-            // Checking if received data truly came from server
-            if ((server_in_length != expected_server_address_length) ||
-                !are_addresses_equal(server_in_address_, server_real_address_))
-                // Received data did not come from server, hence expecting another message
-                goto receive_again;
-        }
+        // Receiving over TCP
+        total_received = ::recv(_socket_params.fd, buffer, size, NO_FLAGS);
 
         if (fill_receive_error(errno, total_received, status))
         {
@@ -354,7 +252,7 @@ namespace ramrod::socket
         {
             return ConnectStatus::CONNECTION_HAS_NOT_BEEN_CALLED_YET;
         }
-        return connect(_ip, _service, _family, _socket_type);
+        return connect(_ip, _service, _family);
     }
 
     ssize_t Client::send(const void *buffer, const std::size_t size, SendStatus *status)
@@ -369,21 +267,8 @@ namespace ramrod::socket
 
         ssize_t total_sent{};
 
-        if (_socket_params.type == SocketType::STREAM)
-        {
-            // Sending over TCP
-            total_sent = ::send(_socket_params.fd, buffer, size, MSG_NOSIGNAL);
-        }
-        else
-        {
-            // Sending over UDP
-            total_sent = ::sendto(_socket_params.fd,
-                                  buffer,
-                                  size,
-                                  MSG_NOSIGNAL,
-                                  static_cast<sockaddr *>(server_real_address_),
-                                  server_address_length_);
-        }
+        // Sending over TCP
+        total_sent = ::send(_socket_params.fd, buffer, size, MSG_NOSIGNAL);
 
         if (fill_send_error(errno, total_sent, status))
         {

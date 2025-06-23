@@ -1,14 +1,15 @@
 #include "ramrod/socket/BasicSocket.hpp"
 
-#include <algorithm>    // for equal
-#include <arpa/inet.h>  // for inet_ntop
-#include <climits>      // for HOST_NAME_MAX
-#include <cstring>      // for memset
-#include <netdb.h>      // for INET6_ADDRSTRLEN
-#include <signal.h>     // for sigaction
-#include <sys/socket.h> // for AF_INET, AF_INET6, ...
-#include <sys/wait.h>   // for waitpid
-#include <unistd.h>     // for gethostname
+#include <arpa/inet.h>      // for inet_ntop
+#include <bits/local_lim.h> // for HOST_NAME_MAX
+#include <cerrno>           // for errno, EBADF, EINVAL, ENOTCONN, ENOTSOCK
+#include <cstring>          // for memset
+#include <netdb.h>          // for addrinfo, freeaddrinfo, getaddrinfo, AI_...
+#include <netinet/in.h>     // for INET6_ADDRSTRLEN, sockaddr_in, sockaddr_in6
+#include <signal.h>         // for sigaction, SA_RESTART, SIGCHLD, sigemptyset
+#include <sys/socket.h>     // for AF_INET, AF_INET6, AF_UNSPEC, shutdown
+#include <sys/wait.h>       // for waitpid, WNOHANG
+#include <unistd.h>         // for gethostname
 
 namespace
 {
@@ -63,7 +64,6 @@ namespace ramrod::socket
         : _ip{},
           _family{Family::UNSPECIFIED},
           _service{},
-          _socket_type{SocketType::STREAM},
           _socket_params{BAD_SOCKET},
           _device_hostname{},
           _device_ip4{},
@@ -217,42 +217,7 @@ namespace ramrod::socket
         return ConnectStatus::SUCCESS;
     }
 
-    SocketType BasicSocket::socket_type()
-    {
-        return _socket_params.type;
-    }
-
     // ::::::::::::::::::::::::::::::::::: PROTECTED FUNCTIONS :::::::::::::::::::::::::::::::::::
-
-    bool BasicSocket::are_addresses_equal(const void *a, const void *b)
-    {
-        const struct sockaddr *a_ptr{static_cast<const struct sockaddr *>(a)};
-
-        // Checking if they have the same type
-        if (a_ptr->sa_family != static_cast<const struct sockaddr *>(b)->sa_family)
-            return false;
-
-        if (a_ptr->sa_family == AF_INET)
-        {
-            const struct sockaddr_in *a_in{static_cast<const struct sockaddr_in *>(a)};
-            const struct sockaddr_in *b_in{static_cast<const struct sockaddr_in *>(b)};
-            // Checking that both address and port are equals
-            return (a_in->sin_addr.s_addr == b_in->sin_addr.s_addr) &&
-                   (a_in->sin_port == b_in->sin_port);
-        }
-        else if (a_ptr->sa_family == AF_INET6)
-        {
-            const struct sockaddr_in6 *a_in6{static_cast<const struct sockaddr_in6 *>(a)};
-            const struct sockaddr_in6 *b_in6{static_cast<const struct sockaddr_in6 *>(b)};
-            // Checking that both address (byte by byte) and port are equals
-            return std::equal(std::begin(a_in6->sin6_addr.__in6_u.__u6_addr32),
-                              std::end(a_in6->sin6_addr.__in6_u.__u6_addr32),
-                              std::begin(b_in6->sin6_addr.__in6_u.__u6_addr32)) &&
-                   (a_in6->sin6_port == b_in6->sin6_port);
-        }
-        // Other families are not supported
-        return false;
-    }
 
     int BasicSocket::convert_family(const ramrod::socket::Family family)
     {
@@ -284,40 +249,10 @@ namespace ramrod::socket
         }
     }
 
-    int BasicSocket::convert_socket_type(const ramrod::socket::SocketType type)
-    {
-        using namespace ramrod::socket;
-
-        switch (type)
-        {
-        case SocketType::DATAGRAM:
-            return SOCK_DGRAM;
-        case SocketType::STREAM:
-            return SOCK_STREAM;
-        default:
-            return ERROR;
-        }
-    }
-
-    SocketType BasicSocket::convert_socket_type(const int type)
-    {
-        using namespace ramrod::socket;
-
-        switch (type)
-        {
-        case SOCK_DGRAM:
-            return SocketType::DATAGRAM;
-        case SOCK_STREAM:
-        default:
-            return SocketType::STREAM;
-        }
-    }
-
     bool BasicSocket::is_initialized()
     {
         // At least one value must be set
         return (_family == Family::UNSPECIFIED) &&
-               (_service.empty() && _ip.empty()) &&
-               (_socket_type == SocketType::STREAM);
+               (_service.empty() && _ip.empty());
     }
 } // namespace: ramrod::socket

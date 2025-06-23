@@ -4,7 +4,7 @@
 #include "ramrod/socket/BasicSocket.hpp"  // for BasicSocket
 #include "ramrod/socket/ChildClient.hpp"  // for ChildClient
 #include "ramrod/socket/Conversor.hpp"    // for Conversor
-#include "ramrod/socket/Enumerators.hpp"  // for ErrorType, Family, SocketType
+#include "ramrod/socket/Enumerators.hpp"  // for ErrorType, Family
 #include "ramrod/socket/ErrorHandler.hpp" // for ErrorHandler
 
 #include <cstdint> // for uint16_t
@@ -31,7 +31,7 @@ namespace ramrod::socket
          *
          * This must be called at least once before any call to \p listen() is made,
          * it creates a server that will allow client connections, you can limit who
-         * connects by using \p port, \p ip_family, and \p socket_type
+         * connects by using \p port, \p ip_family
          *
          * If \p port is zero, then the port number of the returned socket addresses
          * will be left uninitialized.
@@ -43,16 +43,14 @@ namespace ramrod::socket
          *
          * @param[in] port         Port number to where the connection will be made
          * @param[in] ip_family    Defines the IP version to use
-         * @param[in] socket_type  Defines the type of connection
          * @param[in] queue        Defines the max number of pending connections on queue
-         *                         before new are rejected, works only on \p SocketType::STREAM
+         *                         before new are rejected
          *
          * @return SUCCESS if there are no errors, use \p get_error_detail() to see
          *         the full description of the error.
          */
         ConnectStatus open(const std::uint16_t port,
                            const Family ip_family = Family::IPV4,
-                           const SocketType socket_type = SocketType::STREAM,
                            const std::uint32_t queue = 20u);
 
         /**
@@ -66,16 +64,14 @@ namespace ramrod::socket
          *
          * @param[in] service      A string containing a service name or a port number
          * @param[in] ip_family    Defines the IP version to use
-         * @param[in] socket_type  Defines the type of connection
          * @param[in] queue        Defines the max number of pending connections on queue
-         *                         before new are rejected, works only on \p SocketType::STREAM
+         *                         before new are rejected
          *
          * @return SUCCESS if there are no errors, use \p get_error_detail() to see
          *         the full description of the error.
          */
         ConnectStatus open(const std::string &service,
                            const Family ip_family = Family::IPV4,
-                           const SocketType socket_type = SocketType::STREAM,
                            const std::uint32_t queue = 20u);
 
         /**

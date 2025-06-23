@@ -3,9 +3,10 @@
 
 #include "ramrod/socket/BasicSocket.hpp"  // for BasicSocket
 #include "ramrod/socket/Conversor.hpp"    // for Conversor
-#include "ramrod/socket/Enumerators.hpp"  // for ErrorType, Family, SocketType
+#include "ramrod/socket/Enumerators.hpp"  // for ErrorType, Family
 #include "ramrod/socket/ErrorHandler.hpp" // for ErrorHandler
 
+#include <cstddef>     // for size_t
 #include <cstdint>     // for uint16_t
 #include <string>      // for string
 #include <sys/types.h> // for ssize_t
@@ -21,14 +22,12 @@ namespace ramrod::socket
         // TODO: fill
         ConnectStatus connect(const std::string &ip,
                               const std::uint16_t port,
-                              const Family ip_family = Family::IPV4,
-                              const SocketType socket_type = SocketType::STREAM);
+                              const Family ip_family = Family::IPV4);
 
         // TODO: fill
         ConnectStatus connect(const std::string &ip,
                               const std::string &service,
-                              const Family ip_family = Family::IPV4,
-                              const SocketType socket_type = SocketType::STREAM);
+                              const Family ip_family = Family::IPV4);
 
         /**
          * @brief Close this client's connection to server.
@@ -88,14 +87,6 @@ namespace ramrod::socket
          *         different than SUCCESS.
          */
         ssize_t send(const void *buffer, const std::size_t size, SendStatus *status = nullptr);
-
-    private:
-        /// @brief Server address used to verify that received UDP data comes from server
-        void *server_in_address_;
-        /// @brief Real server address used to directly send UDP data to server
-        void *server_real_address_;
-        /// @brief Size of \p server_address_
-        unsigned int server_address_length_;
     };
 } // namespace: ramrod::socket
 

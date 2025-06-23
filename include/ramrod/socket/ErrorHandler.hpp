@@ -14,25 +14,33 @@ namespace ramrod::socket
         virtual ~ErrorHandler() = default;
 
         /**
-         * @brief Get the full description of the encountered status.
+         * @brief Get the full description of encountered \p ConnectStatus
          *
-         * @param[in] status  Status returned by a function
+         * @param[in] status  \p ConnectStatus returned by a function
          *
-         * @return String with the detailed description of the encountered status
+         * @return String with the detailed description of the encountered \p ConnectStatus
          */
-        template <typename Enum>
-        const char *get_status_detail(const Enum status);
+        const char *get_status_detail(const ConnectStatus status);
+
+        /**
+         * @brief Get the full description of encountered \p ReceiveStatus
+         *
+         * @param[in] status  \p ReceiveStatus returned by a function
+         *
+         * @return String with the detailed description of the encountered \p ReceiveStatus
+         */
+        const char *get_status_detail(const ReceiveStatus status);
+
+        /**
+         * @brief Get the full description of encountered \p SendStatus
+         *
+         * @param[in] status  \p SendStatus returned by a function
+         *
+         * @return String with the detailed description of the encountered \p SendStatus
+         */
+        const char *get_status_detail(const SendStatus status);
 
     protected:
-        /**
-         * @brief Convert a \p ReceiveStatus into a \p ConnectStatus
-         *
-         * @param[in] status  \p ReceiveStatus that you would like to convert
-         *
-         * @return An equivalent \p ConnectStatus
-         */
-        ConnectStatus convert_to_connect_status(const ReceiveStatus status);
-
         /**
          * @brief Fill a connection status from \p recv/from() set error.
          *

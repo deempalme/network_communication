@@ -1,9 +1,8 @@
 #ifndef RAMROD_SOCKET_BASIC_SOCKET_HPP
 #define RAMROD_SOCKET_BASIC_SOCKET_HPP
 
-#include "ramrod/socket/Enumerators.hpp" // for ErrorType, Family, SocketType
+#include "ramrod/socket/Enumerators.hpp" // for ErrorType, Family
 
-#include <array>   // for array
 #include <cstdint> // for uint16_t
 #include <string>  // for string
 
@@ -34,7 +33,7 @@ namespace ramrod::socket
          *         the current used family, or IPv4 by default if none is in use. It
          *         will be empty if getting hostname failed
          */
-        const std::string &ip(const Family family = Family::UNSPECIFIED;
+        const std::string &ip(const Family family = Family::UNSPECIFIED);
 
         /**
          * @brief Get current IP protocol version.
@@ -76,27 +75,7 @@ namespace ramrod::socket
          */
         ConnectStatus shutdown(const ShutdownType type = ShutdownType::RECEIVE);
 
-        /**
-         * @brief Get current socket type.
-         *
-         * @return Current socket type
-         */
-        SocketType socket_type();
-
     protected:
-        /**
-         * @brief Check if two sockaddr are equal.
-         *
-         * Only IPv4 and IPv6 are supported, if there is a not supported family then this
-         * will return false
-         *
-         * @param[in] a  First address to compare
-         * @param[in] b  Second address that will be compared
-         *
-         * @return True if bot addresses are the same, false otherwise
-         */
-        static bool are_addresses_equal(const void *a, const void *b);
-
         /**
          * @brief Convert socket::Family into standard family.
          *
@@ -116,26 +95,6 @@ namespace ramrod::socket
         Family convert_family(const int family);
 
         /**
-         * @brief Convert socket::SocketType into standard socket type.
-         *
-         * @param[in] type  Socket type
-         *
-         * @return Standard socket type
-         */
-        int convert_socket_type(const SocketType type);
-
-        /**
-         * @brief Convert standard socket type into socket::SocketType.
-         *
-         * @param[in] type  Standard socket type taken from socket
-         *
-         * @return socket::SocketType's socket type
-         */
-        SocketType convert_socket_type(const int type);
-
-        std::string get_ip_address(ConnectStatus *status = nullptr);
-
-        /**
          * @brief Check if socket parameters has been initialized.
          *
          * @return False if parameters have not been initialized
@@ -148,8 +107,6 @@ namespace ramrod::socket
         Family _family;
         /// @brief Service where socket should be listening
         std::string _service;
-        /// @brief Type that socket should have
-        SocketType _socket_type;
 
         struct SocketInfo
         {
@@ -159,8 +116,6 @@ namespace ramrod::socket
             Family family{};
             /// @brief Socket's real port
             std::uint16_t port{};
-            /// @brief Socket's type
-            SocketType type{};
             /// @brief Socket's real IP address
             std::string ip{};
         };

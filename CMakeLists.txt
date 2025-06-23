@@ -52,9 +52,10 @@ if(NOT TARGET ${RamRodTcpNetwork_LIBRARIES})
     )
 
     target_sources(${PROJECT_NAME}
+        PUBLIC
+        ${UNIT_HPP_FILES}
         PRIVATE
         ${UNIT_CPP_FILES}
-        ${UNIT_HPP_FILES}
     )
 
     target_include_directories(${PROJECT_NAME} BEFORE
