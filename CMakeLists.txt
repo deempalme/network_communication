@@ -1,10 +1,10 @@
 #cmake version
 cmake_minimum_required(VERSION 3.15)
 
-if(NOT TARGET ${RamRodNetwork_LIBRARIES})
-    project(RamRodNetwork
+if(NOT TARGET ${RamRodTcpNetwork_LIBRARIES})
+    project(RamRodTcpNetwork
         VERSION 1.0.0
-        DESCRIPTION "Ram-Rod's Network communication library"
+        DESCRIPTION "Ram-Rod's TCP Network communication library"
         LANGUAGES CXX C
     )
 
@@ -83,4 +83,4 @@ if(NOT TARGET ${RamRodNetwork_LIBRARIES})
         -Wunused-function
         -Wignored-qualifiers
     )
-endif(NOT TARGET ${RamRodNetwork_LIBRARIES})
+endif(NOT TARGET ${RamRodTcpNetwork_LIBRARIES})
