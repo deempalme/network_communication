@@ -1,5 +1,5 @@
-#ifndef RAMROD_SOCKET_CLIENT_HPP
-#define RAMROD_SOCKET_CLIENT_HPP
+#ifndef RAMROD_SOCKET_CHILD_CLIENT_HPP
+#define RAMROD_SOCKET_CHILD_CLIENT_HPP
 
 #include "ramrod/socket/BasicSocket.hpp"  // for BasicSocket
 #include "ramrod/socket/Conversor.hpp"    // for Conversor
@@ -12,23 +12,20 @@
 
 namespace ramrod::socket
 {
-    class Client : public BasicSocket, public Conversor, public ErrorHandler
+    class ChildClient : public BasicSocket, public Conversor, public ErrorHandler
     {
     public:
-        Client();
-        virtual ~Client();
-
         // TODO: fill
-        ConnectStatus connect(const std::string &ip,
-                              const std::uint16_t port,
-                              const Family ip_family = Family::IPV4,
-                              const SocketType socket_type = SocketType::STREAM);
+        ChildClient(const int fd,
+                    const std::string &ip,
+                    const std::uint16_t port,
+                    const Family ip_family = Family::IPV4,
+                    const SocketType socket_type = SocketType::STREAM);
 
-        // TODO: fill
-        ConnectStatus connect(const std::string &ip,
-                              const std::string &service,
-                              const Family ip_family = Family::IPV4,
-                              const SocketType socket_type = SocketType::STREAM);
+        /**
+         * @brief Call disconnect in destruction.
+         */
+        virtual ~ChildClient();
 
         /**
          * @brief Close this client's connection to server.
@@ -63,17 +60,6 @@ namespace ramrod::socket
         ssize_t receive(void *buffer, const std::size_t size, ReceiveStatus *status = nullptr);
 
         /**
-         * @brief Reconnect client with server using same parameters.
-         *
-         * This will disconnect any previos connection (if exist) and try to connect to
-         * server again using the same parameters than utilized in last call to \p connect().
-         *
-         * @return  Error if client has never been connected before, or an error value similar
-         *          than the returned from \p connect()
-         */
-        ConnectStatus reconnect();
-
-        /**
          * @brief Send data to server.
          *
          * @param[in] buffer   Is a pointer to the data you want to send
@@ -99,4 +85,4 @@ namespace ramrod::socket
     };
 } // namespace: ramrod::socket
 
-#endif // RAMROD_SOCKET_CLIENT_HPP
+#endif // RAMROD_SOCKET_CHILD_CLIENT_HPP

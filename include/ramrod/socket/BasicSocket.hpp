@@ -16,11 +16,25 @@ namespace ramrod::socket
         virtual ~BasicSocket() = default;
 
         /**
-         * @brief Get current IP address.
+         * @brief Get hostname from current device.
          *
-         * @return String containing the IP address
+         * @return String containing current device's hostname, it may be empty if there
+         *         was an error while getting hostname
          */
-        const std::string &ip();
+        const std::string &hostname();
+
+        /**
+         * @brief Get current device's IP address.
+         *
+         * @param[in] family  IP family version, you can choose \p Family::UNSPECIFIED
+         *                    to return the IP that matches the current family
+         *
+         * @return String containing current device's IP address, if \p family is
+         *         equal to \p Family::UNSPECIFIED then IP family should be equal to
+         *         the current used family, or IPv4 by default if none is in use. It
+         *         will be empty if getting hostname failed
+         */
+        const std::string &ip(const Family family = Family::UNSPECIFIED;
 
         /**
          * @brief Get current IP protocol version.
@@ -35,6 +49,23 @@ namespace ramrod::socket
          * @return Port's value
          */
         std::uint16_t port();
+
+        /**
+         * @brief Reap dead children processes.
+         *
+         * Removes all children processes that have already finished but still lingering
+         * in mermoy, often called zombies.
+         *
+         * It will perform a wait to allow the system to release the resources associated with
+         * the child. If wait is not performed, then the terminated child remains in a zombie
+         * state.
+         *
+         * @param[in] stop  If true then, it will destroy signal's action that reap child
+         *                  processes
+         *
+         * @return False if failed
+         */
+        static bool read_dead_processes(const bool stop = false);
 
         /**
          * @brief Shutdown receive, send or both communications from a connection.
@@ -102,6 +133,8 @@ namespace ramrod::socket
          */
         SocketType convert_socket_type(const int type);
 
+        std::string get_ip_address(ConnectStatus *status = nullptr);
+
         /**
          * @brief Check if socket parameters has been initialized.
          *
@@ -133,6 +166,13 @@ namespace ramrod::socket
         };
         /// @brief Parameters of server socket
         SocketInfo _socket_params;
+
+        /// @brief Current device's hostname
+        std::string _device_hostname;
+        /// @brief Current device's IPv4 address
+        std::string _device_ip4;
+        /// @brief Current device's IPv6 address
+        std::string _device_ip6;
     };
 } // namespace: ramrod::socket
 

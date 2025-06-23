@@ -23,16 +23,16 @@ namespace
     /**
      * @brief Fill server address from an incoming sockaddr.
      *
-     * @param[out] server_in_address   Mermory will be allocated for this only
-     * @param[out] server_out_address  This will be filled with the outgoing server address
-     * @param[in] socket_type          Type of socket used in this client
-     * @param[in] in_address           Incoming server address in sockaddr format
-     * @param[in] in_length            Length of \p in_address in bytes
+     * @param[out] server_in_address    Mermory will be allocated for this only
+     * @param[out] server_real_address  This will be filled with the real server address
+     * @param[in] socket_type           Type of socket used in this client
+     * @param[in] in_address            Incoming server address in sockaddr format
+     * @param[in] in_length             Length of \p in_address in bytes
      *
      * @return Size of server address in bytes
      */
     socklen_t fill_server_address(void *server_in_address,
-                                  void *server_out_address,
+                                  void *server_real_address,
                                   const ramrod::socket::SocketType socket_type,
                                   sockaddr *in_address,
                                   const socklen_t in_length)
@@ -45,18 +45,18 @@ namespace
                 std::free(server_in_address);
                 server_in_address = nullptr;
             }
-            if (server_out_address != nullptr)
+            if (server_real_address != nullptr)
             {
-                std::free(server_out_address);
-                server_out_address = nullptr;
+                std::free(server_real_address);
+                server_real_address = nullptr;
             }
             static constexpr socklen_t EMPTY{};
             return EMPTY;
         }
 
         const std::size_t address_length{static_cast<std::size_t>(in_length)};
-        std::realloc(server_out_address, address_length);
-        std::memcpy(server_out_address, static_cast<void *>(in_address), address_length);
+        std::realloc(server_real_address, address_length);
+        std::memcpy(server_real_address, static_cast<void *>(in_address), address_length);
         // No need to copy contents into server_in_address (that should be done in receive())
         std::realloc(server_in_address, address_length);
         return in_length;
@@ -115,16 +115,13 @@ namespace ramrod::socket
                                   const SocketType socket_type)
     {
         if (_socket_params.fd != BAD_SOCKET)
-        {
             return ConnectStatus::ALREADY_OPEN;
-        }
 
         static constexpr uint16_t EMPTY_PORT{};
         const bool port_is_empty{port == EMPTY_PORT};
         if (ip.empty() && port_is_empty)
-        {
             return ConnectStatus::IP_AND_PORT_CANNOT_BE_EMPTY;
-        }
+
         const std::string service{port_is_empty ? std::string{} : std::to_string(port)};
 
         return connect(ip, service, ip_family, socket_type);
@@ -136,14 +133,10 @@ namespace ramrod::socket
                                   const SocketType socket_type)
     {
         if (_socket_params.fd != BAD_SOCKET)
-        {
             return ConnectStatus::ALREADY_OPEN;
-        }
 
         if (ip.empty() && service.empty())
-        {
             return ConnectStatus::IP_AND_SERVICE_CANNOT_BE_EMPTY;
-        }
 
         int status{};
 
@@ -180,13 +173,11 @@ namespace ramrod::socket
 
         /// Pointer to server info
         struct addrinfo *server{nullptr};
-        /// Last registered error (if there is one) used for for-loop function uses
-        /// continue rather than return
-        int last_error_code{};
-        /// Last encountered error in for loop
-        ConnectStatus last_error{ConnectStatus::SUCCESS};
         /// String buffer used to store IP addresses
         char string_buffer[INET6_ADDRSTRLEN]{};
+        /// Last registered error (if there is one) used for for-loop function uses
+        /// continue rather than return
+        ConnectStatus last_error{ConnectStatus::SUCCESS};
 
         // Loop through all found devices
         for (server = results; server != nullptr; server = server->ai_next)
@@ -262,9 +253,7 @@ namespace ramrod::socket
         }
 
         if (_socket_params.fd == BAD_SOCKET)
-        {
             return last_error;
-        }
 
         return ConnectStatus::SUCCESS;
     }

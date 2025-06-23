@@ -1,9 +1,8 @@
 #ifndef RAMROD_SOCKET_ERROR_HANDLER_HPP
 #define RAMROD_SOCKET_ERROR_HANDLER_HPP
 
-#include "ramrod/socket/Enumerators.hpp" // for ErrorType
+#include "ramrod/socket/Enumerators.hpp" // for ConnectStatus, ReceiveStatus, SendStatus
 
-#include <array>       // for array
 #include <sys/types.h> // for ssize_t
 
 namespace ramrod::socket
@@ -15,27 +14,25 @@ namespace ramrod::socket
         virtual ~ErrorHandler() = default;
 
         /**
-         * @brief Get a standard \b errno code from a \b ErrorType enum.
+         * @brief Get the full description of the encountered status.
          *
-         * @param[in] error_type  ErrorType enum returned by a ramrod::socket function
+         * @param[in] status  Status returned by a function
          *
-         * @return A standard errno, some values in enum may not be equivalent to an errno
-         *         in such case, the last value in errno when ErrorType was encountered is
-         *         returned and it may not match with \p error_type, if the value is zero
-         *         then, it means that \p error_type does not have a \b errno
+         * @return String with the detailed description of the encountered status
          */
-        int get_errno(const ErrorType error_type);
-
-        /**
-         * @brief Get the full description of the encountered error.
-         *
-         * @param[in] error_type  Error code returned by a function
-         *
-         * @return String with the detailed description of the encountered error
-         */
-        const char *get_error_detail(const ErrorType error_type);
+        template <typename Enum>
+        const char *get_status_detail(const Enum status);
 
     protected:
+        /**
+         * @brief Convert a \p ReceiveStatus into a \p ConnectStatus
+         *
+         * @param[in] status  \p ReceiveStatus that you would like to convert
+         *
+         * @return An equivalent \p ConnectStatus
+         */
+        ConnectStatus convert_to_connect_status(const ReceiveStatus status);
+
         /**
          * @brief Fill a connection status from \p recv/from() set error.
          *
@@ -66,6 +63,15 @@ namespace ramrod::socket
                              SendStatus *status);
 
         /**
+         * @brief Get a connection status from \p accept() errno value.
+         *
+         * @param[in] error_code  errno value set by \p accept()
+         *
+         * @return An equivalent ConnectStatus value for \p error_code
+         */
+        ConnectStatus get_accept_error(const int error_code);
+
+        /**
          * @brief Get a connection status from \p getaddrinfo() returned error.
          *
          * @param[in] error_code  Error code returned by \p getaddrinfo()
@@ -73,6 +79,15 @@ namespace ramrod::socket
          * @return An equivalent ConnectStatus value for \p error_code
          */
         ConnectStatus get_addr_info_error(const int error_code);
+
+        /**
+         * @brief Get a connection status from \p bind() errno value.
+         *
+         * @param[in] error_code  errno value set by \p bind()
+         *
+         * @return An equivalent ConnectStatus value for \p error_code
+         */
+        ConnectStatus get_bind_error(const int error_code);
 
         /**
          * @brief Get a connection status from \p close() errno value.
@@ -102,6 +117,15 @@ namespace ramrod::socket
         ConnectStatus get_inet_ntop_error(const int error_code);
 
         /**
+         * @brief Get a connection status from \p listen() errno value.
+         *
+         * @param[in] error_code  errno value set by \p listen()
+         *
+         * @return An equivalent ConnectStatus value for \p error_code
+         */
+        ConnectStatus get_listen_error(const int error_code);
+
+        /**
          * @brief Get a connection status from \p socket() errno value.
          *
          * @param[in] error_code  errno value set by \p socket()
@@ -118,38 +142,6 @@ namespace ramrod::socket
          * @return An equivalent ConnectStatus value for \p setsockopt
          */
         ConnectStatus get_socket_option_error(const int error_code);
-
-        /**
-         * @brief Set the error code for a defined ErrorType.
-         *
-         * @param[in] error_type  ErrorType enum returned by a ramrod::socket function
-         * @param[in] error_code  Error code returned by a standard socket function
-         *
-         * @return Same value than \p error_type (passthrough)
-         */
-        ErrorType set_error_code(const ErrorType error_type, const int error_code);
-
-        /**
-         * @brief Set the error code for a standard errno.
-         *
-         * @param[in] error_code  Error code returned by a standard socket function
-         *
-         * @return ErrorType enum equivalent to errno
-         */
-        ErrorType set_error_code(const int error_code);
-
-    private:
-        /**
-         * @brief Get ErrorType from a standard socket's returned code.
-         *
-         * @param[in] error_code  Error code returned by a standard socket function
-         *
-         * @return An error enum compatible with ramrod::socket
-         */
-        ErrorType get_error_type(const int error_code);
-
-        /// @brief Stores the lastest error codes for each ErrorType
-        std::array<int, static_cast<size_t>(ErrorType::UNKNOWN_ERROR)> error_codes_{};
     };
 } // namespace: ramrod::socket
 

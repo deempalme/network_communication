@@ -1,87 +1,270 @@
 #include "ramrod/socket/ErrorHandler.hpp"
 
-#include <cerrno>  // for errno
-#include <cstdint> // for size_t
-#include <cstring> // for stderror
-#include <netdb.h> // for EAI_... codes
+#include <cerrno>      // for errno
+#include <cstdint>     // for size_t
+#include <cstring>     // for stderror
+#include <netdb.h>     // for EAI_... codes
+#include <type_traits> // for is_
 
 namespace
 {
     /// @brief Value that indicates an error when receiving or sending data
     static constexpr ssize_t TRANSFER_ERROR{-1l};
+    /// @brief Unknown error message
+    static constexpr char UNKNOWN_ERROR_MSG[]{"Unknown error"};
 } // Unnamed namespace
 
 namespace ramrod::socket
 {
-    /// @brief Id for first element in array (equivalent to ErrorType::SUCCESS)
-    static constexpr size_t FIRST_ELEMENT{1ul};
-
-    int ErrorHandler::get_errno(const ErrorType error_type)
+    template <>
+    const char *get_status_detail(const ConnectStatus status)
     {
-        /// id should not include the first enum (ErrorType::SUCCESS)
-        const size_t id{static_cast<size_t>(error_type) - FIRST_ELEMENT};
-        return error_codes_.at(id);
-    }
-
-    const char *ErrorHandler::get_error_detail(const ErrorType error_type)
-    {
-        switch (error_type)
+        switch (status)
         {
-        case ErrorType::SUCCESS:
+        case ConnectStatus::SUCCESS:
             static constexpr char SUCCESS_MSG[]{"No error encountered"};
             return SUCCESS_MSG;
-        case ErrorType::ALREADY_OPEN:
-            static constexpr char ALREADY_OPEN_MSG[]{"There is already an open server socket"};
+        case ConnectStatus::ADDRESS_ALREADY_IN_USE:
+            static constexpr char ADDRESS_ALREADY_IN_USE_MSG[]{"Local address is already in use"};
+            return ADDRESS_ALREADY_IN_USE_MSG;
+        case ConnectStatus::ADDRESS_NOT_AVAILABLE:
+            static constexpr char ADDRESS_NOT_AVAILABLE_MSG[]{
+                "he bound address was found that all port numbers in range are currently in use"};
+            return ADDRESS_NOT_AVAILABLE_MSG;
+        case ConnectStatus::ALREADY_OPEN:
+            static constexpr char ALREADY_OPEN_MSG[]{
+                "Server socket is already open, only one is allowed per instance"};
             return ALREADY_OPEN_MSG;
-        case ErrorType::IP_AND_PORT_CANNOT_BE_EMPTY:
+        case ConnectStatus::CONNECTION_HAS_NOT_BEEN_CALLED_YET:
+            static constexpr char CONNECTION_HAS_NOT_BEEN_CALLED_YET_MSG[]{
+                "It is necessary to call connect() before at least once"};
+            return CONNECTION_HAS_NOT_BEEN_CALLED_YET_MSG;
+        case ConnectStatus::CONNECTION_IN_PROGRESS:
+            static constexpr char CONNECTION_IN_PROGRESS_MSG[]{
+                "The socket is nonblocking and the connection cannot be completed immediately"};
+            return CONNECTION_IN_PROGRESS_MSG;
+        case ConnectStatus::CONNECTION_REFUSED:
+            static constexpr char CONNECTION_REFUSED_MSG[]{
+                "No one found listening on the remote address"};
+            return CONNECTION_REFUSED_MSG;
+        case ConnectStatus::INTERRUPTED_BY_A_SIGNAL:
+            static constexpr char INTERRUPTED_BY_A_SIGNAL_MSG[]{
+                "Event has been interrupted by a signal"};
+            return INTERRUPTED_BY_A_SIGNAL_MSG;
+        case ConnectStatus::INVALID_ADDRESS:
+            static constexpr char INVALID_ADDRESS_MSG[]{
+                "The specified network host does not have any network addresses "
+                "in the requested address family. Or the node or service is not known"};
+            return INVALID_ADDRESS_MSG;
+        case ConnectStatus::IO_ERROR:
+            static constexpr char IO_ERROR_MSG[]{"An I/O error occurred"};
+            return IO_ERROR_MSG;
+        case ConnectStatus::IP_AND_PORT_CANNOT_BE_EMPTY:
             static constexpr char IP_AND_PORT_CANNOT_BE_EMPTY_MSG[]{
                 "IP address and port cannot be empty at the same time"};
             return IP_AND_PORT_CANNOT_BE_EMPTY_MSG;
-        case ErrorType::IP_AND_SERVICE_CANNOT_BE_EMPTY:
+        case ConnectStatus::IP_AND_SERVICE_CANNOT_BE_EMPTY:
             static constexpr char IP_AND_SERVICE_CANNOT_BE_EMPTY_MSG[]{
                 "IP address and service cannot be empty at the same time"};
             return IP_AND_SERVICE_CANNOT_BE_EMPTY_MSG;
-        case ErrorType::OPEN_HAS_NOT_BEEN_CALLED_YET:
+        case ConnectStatus::MAXIMUM_CONNECTION_COUNT_REACHED:
+            static constexpr char MAXIMUM_CONNECTION_COUNT_REACHED_MSG[]{
+                "The system-wide limit on the total number of open connections has "
+                "been reached"};
+            return MAXIMUM_CONNECTION_COUNT_REACHED_MSG;
+        case ConnectStatus::NETWORK_UNREACHABLE:
+            static constexpr char NETWORK_UNREACHABLE_MSG[]{"Network is unreachable"};
+            return NETWORK_UNREACHABLE_MSG;
+        case ConnectStatus::NO_ACCESS:
+            static constexpr char NO_ACCESS_MSG[]{
+                "Permission to create connection with specified parameters was denied"};
+            return NO_ACCESS_MSG;
+        case ConnectStatus::NOT_OPEN:
+            static constexpr char NOT_OPEN_MSG[]{
+                "The specified network host exists, but does not have any network "
+                "addresses defined."};
+            return NOT_OPEN_MSG;
+        case ConnectStatus::NOT_CONNECTED:
+            static constexpr char NOT_CONNECTED_MSG[]{
+                "Connection not open, or already disconnected"};
+            return NOT_CONNECTED_MSG;
+        case ConnectStatus::OPEN_HAS_NOT_BEEN_CALLED_YET:
             static constexpr char OPEN_HAS_NOT_BEEN_CALLED_YET_MSG[]{
                 "Cannot call reopen() if open() has not been called at least once"};
             return OPEN_HAS_NOT_BEEN_CALLED_YET_MSG;
-        case ErrorType::PORT_CANNOT_BE_EMPTY:
+        case ConnectStatus::OPERATION_NOT_SUPPORTED:
+            static constexpr char OPERATION_NOT_SUPPORTED_MSG[]{
+                "The selected socket type does not support this operation"};
+            return OPERATION_NOT_SUPPORTED_MSG;
+        case ConnectStatus::OUT_OF_MEMORY:
+            static constexpr char OUT_OF_MEMORY_MSG[]{"Out of memory"};
+            return OUT_OF_MEMORY_MSG;
+        case ConnectStatus::PERMANENT_FAILURE:
+            static constexpr char PERMANENT_FAILURE_MSG[]{
+                "The name server returned a permanent failure indication"};
+            return PERMANENT_FAILURE_MSG;
+        case ConnectStatus::PERMISSION_DENIED:
+            static constexpr char PERMISSION_DENIED_MSG[]{
+                "Permission denied to access socket file"};
+            return PERMISSION_DENIED_MSG;
+        case ConnectStatus::PORT_CANNOT_BE_EMPTY:
             static constexpr char PORT_CANNOT_BE_EMPTY_MSG[]{"Port cannot be zero/empty"};
             return PORT_CANNOT_BE_EMPTY_MSG;
-        case ErrorType::SERVICE_CANNOT_BE_EMPTY:
+        case ConnectStatus::PROTOCOL_NOT_SUPPORTED_BY_ADDRESS:
+            static constexpr char PROTOCOL_NOT_SUPPORTED_BY_ADDRESS_MSG[]{
+                "The protocol type or the specified protocol is not supported within "
+                "this domain/address"};
+            return PROTOCOL_NOT_SUPPORTED_BY_ADDRESS_MSG;
+        case ConnectStatus::QUEUE_FULL:
+            static constexpr char QUEUE_FULL_MSG[]{"Queue is full, or its size was set to 0"};
+            return QUEUE_FULL_MSG;
+        case ConnectStatus::SERVICE_CANNOT_BE_EMPTY:
             static constexpr char SERVICE_CANNOT_BE_EMPTY_MSG[]{"Service string cannot be empty"};
             return SERVICE_CANNOT_BE_EMPTY_MSG;
-        case ErrorType::ADDRESS_INFO_BAD_FLAGS:
-        case ErrorType::ADDRESS_INFO_FAMILY_NOT_SUPPORTED:
-        case ErrorType::ADDRESS_INFO_NO_ADDRESS_DEFINED:
-        case ErrorType::ADDRESS_INFO_NO_NAME:
-        case ErrorType::ADDRESS_INFO_OUT_OF_MEMORY:
-        case ErrorType::ADDRESS_INFO_PERMANENT_FAILURE:
-        case ErrorType::ADDRESS_INFO_SERVICE_NOT_AVAILABLE:
-        case ErrorType::ADDRESS_INFO_SOCKET_TYPE_NOT_SUPPORTED:
-        case ErrorType::ADDRESS_INFO_TRY_AGAIN_LATER:
-        case ErrorType::ADDRESS_INFO_UNKNOWN_ADDRESS_FAMILY:
-            return ::gai_strerror(get_errno(error_type));
-        case ErrorType::ADDRESS_INFO_SYSTEM_ERROR:
-        case ErrorType::BIND_SOCKET_ERROR:
-        case ErrorType::CLOSE_ERROR:
-        case ErrorType::CONNECT_SERVER_ERROR:
-        case ErrorType::CREATE_SOCKET_ERROR:
-        case ErrorType::DEAD_PROCESSES_REAPING_CONNECTION_FAILED:
-        case ErrorType::IP_CONVERSION_FAILED:
-        case ErrorType::NO_SERVER_AVAILABLE:
-        case ErrorType::NO_SOCKET_AVAILABLE:
-        case ErrorType::SET_SOCKET_OPTION_ERROR:
-        case ErrorType::SYSTEM_ERROR:
-            return std::strerror(get_errno(error_type));
+        case ConnectStatus::SYSTEM_ERROR:
+            static constexpr char SYSTEM_ERROR_MSG[]{
+                "Other system error; errno is set to indicate the error"};
+            return SYSTEM_ERROR_MSG;
+        case ConnectStatus::TIMED_OUT:
+            static constexpr char TIMED_OUT_MSG[]{
+                "Timeout while attempting connection. The server may be too busy "
+                "to accept new connections"};
+            return TIMED_OUT_MSG;
+        case ConnectStatus::TRY_AGAIN_LATER:
+            static constexpr char TRY_AGAIN_LATER_MSG[]{
+                "The name server returned a temporary failure indication, or there "
+                "are insufficient entries in the routing cache, or a previous connection "
+                "attempt has not yet been completed. Try again later"};
+            return TRY_AGAIN_LATER_MSG;
         default:
-        case ErrorType::UNKNOWN_ERROR:
-            static constexpr char UNKNOWN_ERROR_MSG[]{"Unknown error"};
+        case ConnectStatus::UNKNOWN_ERROR:
             return UNKNOWN_ERROR_MSG;
         }
     }
 
+    template <>
+    const char *get_status_detail(const ReceiveStatus status)
+    {
+        switch (status)
+        {
+        case ReceiveStatus::SUCCESS:
+            static constexpr char SUCCESS_MSG[]{"No error encountered when receiving data"};
+            return SUCCESS_MSG;
+        case ReceiveStatus::BUFFER_POINTER_FAULT:
+            static constexpr char BUFFER_POINTER_FAULT_MSG[]{
+                "The receive buffer pointer(s) point outside the process's address space"};
+            return BUFFER_POINTER_FAULT_MSG;
+        case ReceiveStatus::INTERRUPTED_BY_A_SIGNAL:
+            static constexpr char INTERRUPTED_BY_A_SIGNAL_MSG[]{
+                "The receive was interrupted by delivery of a signal before any data was available"};
+            return INTERRUPTED_BY_A_SIGNAL_MSG;
+        case ReceiveStatus::INVALID_ARGUMENT:
+            static constexpr char INVALID_ARGUMENT_MSG[]{"Invalid argument passed"};
+            return INVALID_ARGUMENT_MSG;
+        case ReceiveStatus::NOT_CONNECTED:
+            static constexpr char NOT_CONNECTED_MSG[]{"There is no connection to server"};
+            return NOT_CONNECTED_MSG;
+        case ReceiveStatus::OUT_OF_MEMORY:
+            static constexpr char OUT_OF_MEMORY_MSG[]{"Could not allocate memroy"};
+            return OUT_OF_MEMORY_MSG;
+        case ReceiveStatus::TRY_RECEIVE_AGAIN:
+            static constexpr char TRY_RECEIVE_AGAIN_MSG[]{
+                "The connection is marked nonblocking and the receive operation would "
+                "block, or a receive timeout had been set and the timeout expired before "
+                "data was received"};
+            return TRY_RECEIVE_AGAIN_MSG;
+        default:
+        case ReceiveStatus::UNKNOWN_ERROR:
+            return UNKNOWN_ERROR_MSG;
+        }
+    }
+
+    template <>
+    const char *get_status_detail(const SendStatus status)
+    {
+        switch (status)
+        {
+        case SendStatus::SUCCESS:
+            static constexpr char SUCCESS_MSG[]{"No error encountered when sending data"};
+            return SUCCESS_MSG;
+        case SendStatus::BAD_MESSAGE_SIZE:
+            static constexpr char BAD_MESSAGE_SIZE_MSG[]{
+                "The socket type requires that message be sent atomically, and the "
+                "size of the message to be sent made this impossible"};
+            return BAD_MESSAGE_SIZE_MSG;
+        case SendStatus::CONNECTION_RESET_BY_PEER:
+            static constexpr char CONNECTION_RESET_BY_PEER_MSG[]{"Connection reset by peer"};
+            return CONNECTION_RESET_BY_PEER_MSG;
+        case SendStatus::INTERRUPTED_BY_A_SIGNAL:
+            static constexpr char INTERRUPTED_BY_A_SIGNAL_MSG[]{
+                "A signal occurred before any data was transmitted"};
+            return INTERRUPTED_BY_A_SIGNAL_MSG;
+        case SendStatus::INVALID_ARGUMENT:
+            static constexpr char INVALID_ARGUMENT_MSG[]{"Invalid argument passed"};
+            return INVALID_ARGUMENT_MSG;
+        case SendStatus::NO_ACCESS:
+            static constexpr char NO_ACCESS_MSG[]{
+                "Write permission is denied on the destination, or search permission "
+                "is denied for one of the directories the path prefix used in ip "
+                "when calling connect(). "
+                "(For UDP sockets) An attempt was made to send to a network/broadcast "
+                "address as though it was a unicast address"};
+            return NO_ACCESS_MSG;
+        case SendStatus::NOT_CONNECTED:
+            static constexpr char NOT_CONNECTED_MSG[]{"There is no connection to server"};
+            return NOT_CONNECTED_MSG;
+        case SendStatus::OUT_OF_MEMORY:
+            static constexpr char OUT_OF_MEMORY_MSG[]{"No memory available"};
+            return OUT_OF_MEMORY_MSG;
+        case SendStatus::OUTPUT_QUEUE_FULL:
+            static constexpr char OUTPUT_QUEUE_FULL_MSG[]{
+                "The output queue for a network interface was full. This generally "
+                "indicates that the interface has stopped sending, but may be caused "
+                "by transient congestion.  (Normally, this does not occur in Linux. "
+                "Packets are just silently dropped when a device queue overflows)"};
+            return OUTPUT_QUEUE_FULL_MSG;
+        case SendStatus::TRY_SEND_AGAIN:
+            static constexpr char TRY_SEND_AGAIN_MSG[]{
+                "The connection is marked nonblocking and the requested operation would "
+                "block. Or connection has not been completed yet"};
+            return TRY_SEND_AGAIN_MSG;
+        default:
+        case SendStatus::UNKNOWN_ERROR:
+            return UNKNOWN_ERROR_MSG;
+        }
+    }
+
+    template <typename Enum>
+    const char *get_status_detail(const Enum status)
+    {
+        static_assert(std::is_same<ConnectStatus, Enum>::value ||
+                          std::is_same<ReceiveStatus, Enum>::value ||
+                          std::is_same<SendStatus, Enum>::value,
+                      "Invalid status' enumerator");
+        return get_status_detail(status);
+    }
+
     // ::::::::::::::::::::::::::::::::::: PROTECTED FUNCTIONS :::::::::::::::::::::::::::::::::::
+
+    ConnectStatus ErrorHandler::convert_to_connect_status(const ReceiveStatus status)
+    {
+        switch (status)
+        {
+        case ReceiveStatus::TRY_RECEIVE_AGAIN:
+            return ConnectStatus::TRY_AGAIN_LATER;
+        case ReceiveStatus::NOT_CONNECTED:
+            return ConnectStatus::NOT_CONNECTED;
+        case ReceiveStatus::INTERRUPTED_BY_A_SIGNAL:
+            return ConnectStatus::INTERRUPTED_BY_A_SIGNAL;
+        case ReceiveStatus::INVALID_ARGUMENT:
+            return ConnectStatus::INVALID_ADDRESS;
+        case ReceiveStatus::OUT_OF_MEMORY:
+            return ConnectStatus::OUT_OF_MEMORY;
+        case ReceiveStatus::BUFFER_POINTER_FAULT:
+        default:
+            return ConnectStatus::UNKNOWN_ERROR;
+        }
+    }
 
     bool ErrorHandler::fill_receive_error(const int error_code,
                                           const ssize_t received_length,
@@ -114,7 +297,7 @@ namespace ramrod::socket
                 final_status = ReceiveStatus::INVALID_ARGUMENT;
                 break;
             case ENOMEM:
-                final_status = ReceiveStatus::NO_MEMORY;
+                final_status = ReceiveStatus::OUT_OF_MEMORY;
                 break;
             default:
                 final_status = ReceiveStatus::UNKNOWN_ERROR;
@@ -170,7 +353,7 @@ namespace ramrod::socket
                 final_status = SendStatus::OUTPUT_QUEUE_FULL;
                 break;
             case ENOMEM:
-                final_status = SendStatus::NO_MEMORY_AVAILABLE;
+                final_status = SendStatus::OUT_OF_MEMORY;
                 break;
             case EALREADY:
             case EDESTADDRREQ:
@@ -188,6 +371,35 @@ namespace ramrod::socket
             *status = final_status;
 
         return should_disconnect;
+    }
+
+    ConnectStatus ErrorHandler::get_accept_error(const int error_code)
+    {
+        switch (error_code)
+        {
+        case EAGAIN:
+            return ConnectStatus::TRY_AGAIN_LATER;
+        case EBADF:
+        case ENOTSOCK:
+        case ECONNABORTED:
+            return ConnectStatus::NOT_CONNECTED;
+        case EINTR:
+            return ConnectStatus::INTERRUPTED_BY_A_SIGNAL;
+        case EINVAL:
+            return ConnectStatus::NOT_OPEN;
+        case EMFILE:
+        case ENFILE:
+            return ConnectStatus::MAXIMUM_CONNECTION_COUNT_REACHED;
+        case ENOBUFS:
+        case ENOMEM:
+            return ConnectStatus::OUT_OF_MEMORY;
+        case EOPNOTSUPP:
+            return ConnectStatus::OPERATION_NOT_SUPPORTED;
+        case EPROTO:
+        // Ignoring errors above
+        default:
+            return ConnectStatus::UNKNOWN_ERROR;
+        }
     }
 
     ConnectStatus ErrorHandler::get_addr_info_error(const int error_code)
@@ -212,6 +424,33 @@ namespace ramrod::socket
         case EAI_SERVICE:
         case EAI_SOCKTYPE:
             // Igonring codes above
+        default:
+            return ConnectStatus::UNKNOWN_ERROR;
+        }
+    }
+
+    ConnectStatus ErrorHandler::get_bind_error(const int error_code)
+    {
+        switch (error_code)
+        {
+        case EACCES:
+            return ConnectStatus::PERMISSION_DENIED;
+        case EADDRINUSE:
+        case EADDRNOTAVAIL:
+            return ConnectStatus::ADDRESS_NOT_AVAILABLE;
+        case EBADF:
+        case ENOTSOCK:
+            return ConnectStatus::NOT_CONNECTED;
+        case EINVAL:
+            return ConnectStatus::INVALID_ADDRESS;
+        // The following errors are specific to UNIX domain (AF_UNIX) sockets:
+        case EFAULT:
+        case ELOOP:
+        case ENAMETOOLONG:
+        case ENOENT:
+        case ENOMEM:
+        case ENOTDIR:
+        case EROFS:
         default:
             return ConnectStatus::UNKNOWN_ERROR;
         }
@@ -285,6 +524,27 @@ namespace ramrod::socket
         }
     }
 
+    ConnectStatus ErrorHandler::get_listen_error(const int error_code)
+    {
+        switch (error_code)
+        {
+        case ECONNREFUSED:
+            return ConnectStatus::QUEUE_FULL;
+        case EADDRINUSE:
+            return ConnectStatus::ADDRESS_ALREADY_IN_USE;
+        case ENOBUFS:
+            return ConnectStatus::OUT_OF_MEMORY;
+        case EBADF:
+        case ENOTSOCK:
+        case EINVAL:
+            return ConnectStatus::NOT_CONNECTED;
+        case EOPNOTSUPP:
+            return ConnectStatus::OPERATION_NOT_SUPPORTED;
+        default:
+            return ConnectStatus::UNKNOWN_ERROR;
+        }
+    }
+
     ConnectStatus ErrorHandler::get_socket_error(const int error_code)
     {
         switch (error_code)
@@ -324,64 +584,6 @@ namespace ramrod::socket
             // Igonring codes above
         default:
             return ConnectStatus::UNKNOWN_ERROR;
-        }
-    }
-
-    ErrorType ErrorHandler::set_error_code(const ErrorType error_type, const int error_code)
-    {
-        if (error_type == ErrorType::SUCCESS)
-        {
-            // There is no errno for a successful operation
-            return error_type;
-        }
-        /// id should not include the first enum (ErrorType::SUCCESS)
-        const size_t id{static_cast<size_t>(error_type) - FIRST_ELEMENT};
-        error_codes_.at(id) = error_code;
-        return error_type;
-    }
-
-    ErrorType ErrorHandler::set_error_code(const int error_code)
-    {
-        const ErrorType error_type{get_error_type(error_code)};
-
-        /// id should not include the first enum (ErrorType::SUCCESS)
-        const size_t id{static_cast<size_t>(error_type) - FIRST_ELEMENT};
-        error_codes_.at(id) = error_code;
-        return error_type;
-    }
-
-    // :::::::::::::::::::::::::::::::::::: PRIVATE FUNCTIONS ::::::::::::::::::::::::::::::::::::
-
-    ErrorType ErrorHandler::get_error_type(const int error_code)
-    {
-        using namespace ramrod::socket;
-
-        switch (error_code)
-        {
-        case EAI_ADDRFAMILY:
-            return ErrorType::ADDRESS_INFO_UNKNOWN_ADDRESS_FAMILY;
-        case EAI_AGAIN:
-            return ErrorType::ADDRESS_INFO_TRY_AGAIN_LATER;
-        case EAI_BADFLAGS:
-            return ErrorType::ADDRESS_INFO_BAD_FLAGS;
-        case EAI_FAIL:
-            return ErrorType::ADDRESS_INFO_PERMANENT_FAILURE;
-        case EAI_FAMILY:
-            return ErrorType::ADDRESS_INFO_FAMILY_NOT_SUPPORTED;
-        case EAI_MEMORY:
-            return ErrorType::ADDRESS_INFO_OUT_OF_MEMORY;
-        case EAI_NODATA:
-            return ErrorType::ADDRESS_INFO_NO_ADDRESS_DEFINED;
-        case EAI_NONAME:
-            return ErrorType::ADDRESS_INFO_NO_NAME;
-        case EAI_SERVICE:
-            return ErrorType::ADDRESS_INFO_SERVICE_NOT_AVAILABLE;
-        case EAI_SOCKTYPE:
-            return ErrorType::ADDRESS_INFO_SOCKET_TYPE_NOT_SUPPORTED;
-        case EAI_SYSTEM:
-            return ErrorType::ADDRESS_INFO_SYSTEM_ERROR;
-        default:
-            return ErrorType::SYSTEM_ERROR;
         }
     }
 } // namespace: ramrod::socket

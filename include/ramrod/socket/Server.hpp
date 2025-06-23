@@ -2,11 +2,13 @@
 #define RAMROD_SOCKET_SERVER_HPP
 
 #include "ramrod/socket/BasicSocket.hpp"  // for BasicSocket
+#include "ramrod/socket/ChildClient.hpp"  // for ChildClient
 #include "ramrod/socket/Conversor.hpp"    // for Conversor
 #include "ramrod/socket/Enumerators.hpp"  // for ErrorType, Family, SocketType
 #include "ramrod/socket/ErrorHandler.hpp" // for ErrorHandler
 
 #include <cstdint> // for uint16_t
+#include <memory>  // for shared_ptr
 #include <string>  // for string
 
 namespace ramrod::socket
@@ -15,12 +17,7 @@ namespace ramrod::socket
     {
     public:
         /**
-         * @brief Init variables and also set signal to read dead processes.
-         *
-         * If setting signal to read dead processes failed then,
-         * \p ErrorType::DEAD_PROCESSES_REAPING_CONNECTION_FAILED will be set with errno,
-         * use \b get_error_detail(ErrorType::DEAD_PROCESSES_REAPING_CONNECTION_FAILED)
-         * to obtain the detailed information of why it failed.
+         * @brief Initialize inheritance.
          */
         Server();
 
@@ -47,13 +44,16 @@ namespace ramrod::socket
          * @param[in] port         Port number to where the connection will be made
          * @param[in] ip_family    Defines the IP version to use
          * @param[in] socket_type  Defines the type of connection
+         * @param[in] queue        Defines the max number of pending connections on queue
+         *                         before new are rejected, works only on \p SocketType::STREAM
          *
          * @return SUCCESS if there are no errors, use \p get_error_detail() to see
          *         the full description of the error.
          */
-        ErrorType open(const std::uint16_t port,
-                       const Family ip_family = Family::IPV4,
-                       const SocketType socket_type = SocketType::STREAM);
+        ConnectStatus open(const std::uint16_t port,
+                           const Family ip_family = Family::IPV4,
+                           const SocketType socket_type = SocketType::STREAM,
+                           const std::uint32_t queue = 20u);
 
         /**
          * @brief Same as open() but it is possible to also use a string instead of just
@@ -67,12 +67,16 @@ namespace ramrod::socket
          * @param[in] service      A string containing a service name or a port number
          * @param[in] ip_family    Defines the IP version to use
          * @param[in] socket_type  Defines the type of connection
+         * @param[in] queue        Defines the max number of pending connections on queue
+         *                         before new are rejected, works only on \p SocketType::STREAM
          *
-         * @return TODO: fill
+         * @return SUCCESS if there are no errors, use \p get_error_detail() to see
+         *         the full description of the error.
          */
-        ErrorType open(const std::string &service,
-                       const Family ip_family = Family::IPV4,
-                       const SocketType socket_type = SocketType::STREAM);
+        ConnectStatus open(const std::string &service,
+                           const Family ip_family = Family::IPV4,
+                           const SocketType socket_type = SocketType::STREAM,
+                           const std::uint32_t queue = 20u);
 
         /**
          * @brief Close this server to all clients.
@@ -81,7 +85,7 @@ namespace ramrod::socket
          *
          * @return  It will return error when server cannot be closed
          */
-        ErrorType close();
+        ConnectStatus close();
 
         /**
          * @brief Check if server is still open.
@@ -89,6 +93,20 @@ namespace ramrod::socket
          * @return True when server is still open for communications with clients
          */
         bool is_open();
+
+        /**
+         * @brief Accept a single pending connection from a client.
+         *
+         * TODO: fill
+         *
+         * @param[out] status  If not nullptr then, this will be set with the status of
+         *                     this function, it should return \p SUCCESS if everything
+         *                     goes well, but if returned pointer is nullptr a different
+         *                     status will be set
+         *
+         * @return TODO: fill
+         */
+        std::shared_ptr<ChildClient> accept(ConnectStatus *status = nullptr);
 
         /**
          * @brief Recreate server using same parameters.
@@ -100,7 +118,11 @@ namespace ramrod::socket
          * @return  Error if server has never been open before, or an error value similar
          *          than the returned from \p open()
          */
-        ErrorType reopen();
+        ConnectStatus reopen();
+
+    private:
+        /// @brief Max number of pending connections on queue before new are rejected
+        int max_queue_count_;
     };
 } // namespace: ramrod::socket
 
